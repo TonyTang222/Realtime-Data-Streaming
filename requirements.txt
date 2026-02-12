@@ -95,7 +95,7 @@ protobuf==4.24.2
 psutil==5.9.5
 py4j==0.10.9.7
 pycparser==2.21
-pydantic==1.10.12
+pydantic>=1.10.0,<2.0.0
 Pygments==2.16.1
 PyJWT==2.8.0
 # pyspark==3.4.1
@@ -133,3 +133,6 @@ Werkzeug==2.2.3
 wrapt==1.15.0
 WTForms==3.0.1
 yarl==1.9.2
+
+# === New Dependencies for Production-Grade Pipeline ===
+python-dotenv==1.0.0    # Environment variable management
