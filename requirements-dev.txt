@@ -1,0 +1,19 @@
+# Development and Testing Dependencies
+
+# Include production dependencies
+-r requirements.txt
+
+# Testing
+pytest==7.4.0
+pytest-cov==4.1.0           # Coverage reports
+pytest-mock==3.11.1         # Mocking utilities
+pytest-asyncio==0.21.1      # Async test support
+
+# Code Quality
+black==23.9.1               # Code formatter
+isort==5.12.0               # Import sorter
+flake8==6.1.0               # Linter
+mypy==1.5.1                 # Type checker
+
+# Development Utilities
+ipython==8.15.0             # Enhanced Python shell
