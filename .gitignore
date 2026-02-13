@@ -20,9 +20,6 @@ htmlcov/
 # Claude Code
 .claude/
 
-# Personal notes (not for commit)
-INTERVIEW_NOTES.md
-
 # OS
 .DS_Store
 Thumbs.db
