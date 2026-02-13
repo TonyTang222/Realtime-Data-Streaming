@@ -50,6 +50,9 @@ RandomUser API → Airflow (daily schedule)
 ```bash
 git clone https://github.com/TonyTang222/Realtime-Data-Streaming.git
 cd Realtime-Data-Streaming
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
 cp .env.example .env
 ```
 
