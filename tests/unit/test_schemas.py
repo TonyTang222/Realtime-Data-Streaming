@@ -100,7 +100,7 @@ class TestUserAPIResponse:
 
     def test_valid_user_response(self, valid_user_data):
         """Test valid user response."""
-        user = UserAPIResponse.model_validate(valid_user_data)
+        user = UserAPIResponse.parse_obj(valid_user_data)
         assert user.name.first == "John"
         assert user.name.last == "Doe"
         assert user.email == "john.doe@example.com"
@@ -108,33 +108,33 @@ class TestUserAPIResponse:
     def test_invalid_gender_normalized(self, valid_user_data):
         """Test invalid gender is normalized to 'other'."""
         valid_user_data['gender'] = "unknown"
-        user = UserAPIResponse.model_validate(valid_user_data)
+        user = UserAPIResponse.parse_obj(valid_user_data)
         assert user.gender == "other"
 
     def test_gender_case_normalized(self, valid_user_data):
         """Test gender case normalization."""
         valid_user_data['gender'] = "MALE"
-        user = UserAPIResponse.model_validate(valid_user_data)
+        user = UserAPIResponse.parse_obj(valid_user_data)
         assert user.gender == "male"
 
     def test_email_case_normalized(self, valid_user_data):
         """Test email is lowercased."""
         valid_user_data['email'] = "John.Doe@EXAMPLE.COM"
-        user = UserAPIResponse.model_validate(valid_user_data)
+        user = UserAPIResponse.parse_obj(valid_user_data)
         assert user.email == "john.doe@example.com"
 
     def test_invalid_email_raises_error(self, valid_user_data):
         """Test invalid email raises error."""
         valid_user_data['email'] = "not-an-email"
         with pytest.raises(ValidationError) as exc_info:
-            UserAPIResponse.model_validate(valid_user_data)
+            UserAPIResponse.parse_obj(valid_user_data)
         assert "email" in str(exc_info.value).lower()
 
     def test_missing_required_field_raises_error(self, valid_user_data):
         """Test missing required field raises error."""
         del valid_user_data['name']
         with pytest.raises(ValidationError):
-            UserAPIResponse.model_validate(valid_user_data)
+            UserAPIResponse.parse_obj(valid_user_data)
 
 
 class TestTransformedUser:
@@ -146,7 +146,7 @@ class TestTransformedUser:
 
     def test_valid_transformed_user(self, valid_transformed_data):
         """Test valid transformed user."""
-        user = TransformedUser.model_validate(valid_transformed_data)
+        user = TransformedUser.parse_obj(valid_transformed_data)
         assert user.first_name == "John"
         assert user.email == "john.doe@example.com"
 
@@ -154,37 +154,37 @@ class TestTransformedUser:
         """Test invalid UUID raises error."""
         valid_transformed_data['id'] = "not-a-uuid"
         with pytest.raises(ValidationError):
-            TransformedUser.model_validate(valid_transformed_data)
+            TransformedUser.parse_obj(valid_transformed_data)
 
     def test_uuid_format_validated(self, valid_transformed_data):
         """Test UUID format validation."""
         valid_transformed_data['id'] = "550e8400-e29b-41d4-a716-446655440000"
-        user = TransformedUser.model_validate(valid_transformed_data)
+        user = TransformedUser.parse_obj(valid_transformed_data)
         assert user.id == "550e8400-e29b-41d4-a716-446655440000"
 
     def test_invalid_gender_raises_error(self, valid_transformed_data):
         """Test invalid gender raises error."""
         valid_transformed_data['gender'] = "unknown"
         with pytest.raises(ValidationError):
-            TransformedUser.model_validate(valid_transformed_data)
+            TransformedUser.parse_obj(valid_transformed_data)
 
     def test_empty_first_name_raises_error(self, valid_transformed_data):
         """Test empty first name raises error."""
         valid_transformed_data['first_name'] = ""
         with pytest.raises(ValidationError):
-            TransformedUser.model_validate(valid_transformed_data)
+            TransformedUser.parse_obj(valid_transformed_data)
 
     def test_name_too_long_raises_error(self, valid_transformed_data):
         """Test name too long raises error."""
         valid_transformed_data['first_name'] = "A" * 101
         with pytest.raises(ValidationError):
-            TransformedUser.model_validate(valid_transformed_data)
+            TransformedUser.parse_obj(valid_transformed_data)
 
     def test_extra_fields_forbidden(self, valid_transformed_data):
         """Test extra fields are forbidden."""
         valid_transformed_data['extra_field'] = "not allowed"
         with pytest.raises(ValidationError):
-            TransformedUser.model_validate(valid_transformed_data)
+            TransformedUser.parse_obj(valid_transformed_data)
 
 
 class TestDLQMessage:

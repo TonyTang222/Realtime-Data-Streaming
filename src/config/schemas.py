@@ -3,9 +3,7 @@
 import re
 from typing import Optional, List, Tuple, Any, Dict
 from datetime import datetime
-from pydantic import BaseModel, Field
-
-from pydantic import field_validator
+from pydantic import BaseModel, Field, validator
 
 # PySpark imports are optional (not available in Airflow container)
 try:
@@ -36,7 +34,7 @@ class LocationInfo(BaseModel):
     country: str
     postcode: str
 
-    @field_validator('postcode', mode='before')
+    @validator('postcode', pre=True)
     @classmethod
     def convert_postcode_to_string(cls, v):
         """Ensure postcode is string."""
@@ -82,7 +80,7 @@ class UserAPIResponse(BaseModel):
     phone: str
     picture: PictureInfo
 
-    @field_validator('gender')
+    @validator('gender')
     @classmethod
     def validate_gender(cls, v: str) -> str:
         """Validate gender value."""
@@ -91,7 +89,7 @@ class UserAPIResponse(BaseModel):
             return 'other'
         return v.lower()
 
-    @field_validator('email')
+    @validator('email')
     @classmethod
     def validate_email_format(cls, v: str) -> str:
         """Validate email format."""
@@ -119,7 +117,7 @@ class TransformedUser(BaseModel):
     phone: str = Field(..., max_length=50)
     picture: str = Field(..., description="URL to profile picture")
 
-    @field_validator('gender')
+    @validator('gender')
     @classmethod
     def validate_gender(cls, v: str) -> str:
         """Validate gender value."""
@@ -127,7 +125,7 @@ class TransformedUser(BaseModel):
             raise ValueError(f'Invalid gender: {v}. Must be male, female, or other')
         return v
 
-    @field_validator('email')
+    @validator('email')
     @classmethod
     def validate_email(cls, v: str) -> str:
         """Validate email format."""
@@ -136,7 +134,7 @@ class TransformedUser(BaseModel):
             raise ValueError(f'Invalid email format: {v}')
         return v.lower()
 
-    @field_validator('id')
+    @validator('id')
     @classmethod
     def validate_uuid_format(cls, v: str) -> str:
         """Validate UUID format."""
@@ -254,7 +252,7 @@ def validate_api_response(response: Dict[str, Any]) -> Tuple[bool, Optional[User
     # Validate with Pydantic
     user_data = response['results'][0]
     try:
-        validated = UserAPIResponse.model_validate(user_data)
+        validated = UserAPIResponse.parse_obj(user_data)
         return True, validated, []
     except Exception as e:
         # Parse Pydantic error details
@@ -271,7 +269,7 @@ def validate_transformed_data(data: Dict[str, Any]) -> Tuple[bool, Optional[Tran
     """Validate transformed data. Returns (is_valid, validated_data, errors)."""
     errors = []
     try:
-        validated = TransformedUser.model_validate(data)
+        validated = TransformedUser.parse_obj(data)
         return True, validated, []
     except Exception as e:
         if hasattr(e, 'errors'):

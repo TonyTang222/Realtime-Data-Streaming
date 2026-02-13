@@ -10,7 +10,7 @@ from kafka.errors import KafkaError, NoBrokersAvailable, KafkaTimeoutError
 
 from src.config.settings import get_settings, KafkaConfig
 from src.config.schemas import DLQMessage
-from src.exceptions.custom_exceptions import KafkaPublishError, KafkaConnectionError
+from src.exceptions.custom_exceptions import KafkaConnectionError
 from src.utils.retry import exponential_backoff_retry
 
 logger = logging.getLogger(__name__)
@@ -206,7 +206,7 @@ class ResilientKafkaProducer:
 
             future = self._producer.send(
                 self.config.topic_dlq,
-                value=dlq_message.model_dump()
+                value=dlq_message.dict()
             )
             future.get(timeout=10)
 

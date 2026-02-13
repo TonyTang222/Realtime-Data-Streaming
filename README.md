@@ -110,8 +110,6 @@ docker compose down -v
 │   │   └── dlq_consumer.py          # DLQ message analysis, processing, and retry
 │   ├── transformers/
 │   │   └── user_transformer.py      # API response → flat user record
-│   ├── storage/
-│   │   └── cassandra_client.py      # Cassandra client with prepared statements
 │   ├── utils/
 │   │   ├── retry.py                 # Exponential backoff with jitter decorator
 │   │   ├── logging_config.py        # JSON structured logging
@@ -121,7 +119,7 @@ docker compose down -v
 ├── tests/
 │   ├── unit/                        # Unit tests (retry, schemas, transformers, etc.)
 │   └── integration/                 # Pipeline integration tests
-├── docker-compose.yml               # 12 services with health checks
+├── docker-compose.yml               # 11 services with health checks
 ├── Dockerfile                       # Spark application image
 └── spark_stream.py                  # Spark streaming entry point
 ```
@@ -134,6 +132,6 @@ docker compose down -v
 - **Apache Kafka** (Confluent 7.4) — Message broker with Dead Letter Queue
 - **Spark Structured Streaming 3.5** — Real-time stream processing from Kafka to Cassandra
 - **Apache Cassandra** — Distributed NoSQL storage with natural upsert
-- **Pydantic v2** — Schema validation for API responses and transformed data
+- **Pydantic v1** — Schema validation for API responses and transformed data
 - **Docker Compose** — 12-service orchestration with health checks and startup ordering
 - **pytest** — Unit and integration tests with mock-based external service isolation
