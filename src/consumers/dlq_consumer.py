@@ -304,7 +304,7 @@ class DLQConsumer:
                         count += 1
                         continue
 
-                    topic = target_topic or msg.topic or self.settings.kafka.topic
+                    topic = target_topic or msg.topic or self.settings.kafka.topic_user_data
 
                     msg.original_message['_retry_count'] = msg.retry_count + 1
 

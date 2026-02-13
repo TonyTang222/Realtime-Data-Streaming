@@ -19,12 +19,10 @@ from src.exceptions.custom_exceptions import (
     # Kafka
     KafkaError,
     KafkaConnectionError,
-    KafkaPublishError,
     # Cassandra
     CassandraError,
     CassandraConnectionError,
     CassandraWriteError,
-    CassandraReadError,
     # Data
     DataValidationError,
     TransformationError,
@@ -45,7 +43,6 @@ class TestExceptionHierarchy:
             APIRateLimitError,
             KafkaError,
             KafkaConnectionError,
-            KafkaPublishError,
             CassandraError,
             CassandraConnectionError,
             CassandraWriteError,
@@ -73,7 +70,6 @@ class TestExceptionHierarchy:
         """Test Kafka exceptions inherit from KafkaError."""
         kafka_exceptions = [
             KafkaConnectionError,
-            KafkaPublishError,
         ]
 
         for exc_class in kafka_exceptions:
@@ -129,34 +125,6 @@ class TestAPIExceptions:
         """Test APIRateLimitError default status code."""
         error = APIRateLimitError("Rate limited")
         assert error.status_code == 429
-
-
-class TestKafkaExceptions:
-    """Test Kafka-related exceptions."""
-
-    def test_kafka_publish_error_basic(self):
-        """Test basic KafkaPublishError functionality."""
-        error = KafkaPublishError("Publish failed")
-        assert error.message == "Publish failed"
-        assert error.topic is None
-        assert error.key is None
-        assert error.original_data is None
-
-    def test_kafka_publish_error_with_metadata(self):
-        """Test KafkaPublishError with metadata."""
-        original = {"user_id": "123"}
-        error = KafkaPublishError(
-            "Publish failed",
-            topic="user_data",
-            key="user-123",
-            original_data=original
-        )
-
-        assert error.topic == "user_data"
-        assert error.key == "user-123"
-        assert error.original_data == original
-        assert "[topic=user_data]" in str(error)
-        assert "[key=user-123]" in str(error)
 
 
 class TestCassandraExceptions:
@@ -245,7 +213,6 @@ class TestIsRetryable:
         non_retryable_errors = [
             DataValidationError("Invalid data"),
             TransformationError("Transform failed"),
-            KafkaPublishError("Publish failed"),
             CassandraWriteError("Write failed"),
             APIError("Client error", status_code=400),  # 4xx errors
         ]

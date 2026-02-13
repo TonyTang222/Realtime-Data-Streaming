@@ -15,7 +15,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.producers.api_client import RandomUserAPIClient
 from src.producers.kafka_producer import ResilientKafkaProducer
 from src.transformers.user_transformer import UserTransformer
-from src.storage.cassandra_client import ResilientCassandraClient
 from src.config.schemas import validate_transformed_data, DLQMessage
 from src.exceptions.custom_exceptions import TransformationError
 
@@ -51,29 +50,14 @@ class TestFullPipelineFlow:
             yield mock_instance
 
     @pytest.fixture
-    def mock_cassandra(self):
-        """Mock Cassandra cluster."""
-        with patch('src.storage.cassandra_client.Cluster') as mock_cluster_class:
-            mock_cluster = MagicMock()
-            mock_session = MagicMock()
-            mock_cluster.connect.return_value = mock_session
-            mock_cluster_class.return_value = mock_cluster
-            yield mock_session
-
-    @pytest.fixture
     def mock_settings(self):
         """Mock settings."""
-        with patch('src.producers.api_client.get_settings') as mock_api_settings, \
-             patch('src.storage.cassandra_client.get_settings') as mock_cass_settings:
-
+        with patch('src.producers.api_client.get_settings') as mock_api_settings:
             mock_config = MagicMock()
             mock_config.api.base_url = "https://randomuser.me/api/"
             mock_config.api.timeout_seconds = 30
-            mock_config.cassandra.hosts = ['localhost']
-            mock_config.cassandra.keyspace = 'test_keyspace'
 
             mock_api_settings.return_value = mock_config
-            mock_cass_settings.return_value = mock_config
 
             yield mock_config
 
@@ -81,11 +65,10 @@ class TestFullPipelineFlow:
         self,
         mock_api_session,
         mock_kafka_producer,
-        mock_cassandra,
         mock_settings,
         sample_api_response
     ):
-        """Test the full happy-path pipeline flow."""
+        """Test the full happy-path pipeline flow: API -> Transform -> Validate -> Kafka."""
         # 1. Fetch from API
         api_client = RandomUserAPIClient()
         api_client._session = mock_api_session
@@ -115,17 +98,6 @@ class TestFullPipelineFlow:
 
         assert result is True
         mock_kafka_producer.send.assert_called()
-
-        # 5. Write to Cassandra
-        cassandra_client = ResilientCassandraClient(hosts=['localhost'], keyspace='test')
-        mock_prepared = MagicMock()
-        mock_prepared.bind.return_value = MagicMock()
-        mock_cassandra.prepare.return_value = mock_prepared
-        mock_cassandra.execute.return_value = MagicMock()
-        cassandra_client._session = mock_cassandra
-
-        insert_result = cassandra_client.insert_user(transformed_user)
-        assert insert_result is True
 
     def test_pipeline_with_multiple_users(
         self,

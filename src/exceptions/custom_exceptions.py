@@ -77,30 +77,6 @@ class KafkaConnectionError(KafkaError):
     pass
 
 
-class KafkaPublishError(KafkaError):
-    """Raised when message publishing to Kafka fails."""
-
-    def __init__(
-        self,
-        message: str,
-        topic: Optional[str] = None,
-        key: Optional[str] = None,
-        original_data: Optional[Any] = None
-    ):
-        super().__init__(message)
-        self.topic = topic
-        self.key = key
-        self.original_data = original_data
-
-    def __str__(self) -> str:
-        parts = [self.message]
-        if self.topic:
-            parts.append(f"[topic={self.topic}]")
-        if self.key:
-            parts.append(f"[key={self.key}]")
-        return " ".join(parts)
-
-
 # ============================================================
 # Cassandra Exceptions
 # ============================================================
@@ -127,11 +103,6 @@ class CassandraWriteError(CassandraError):
         super().__init__(message)
         self.keyspace = keyspace
         self.table = table
-
-
-class CassandraReadError(CassandraError):
-    """Raised when read from Cassandra fails."""
-    pass
 
 
 # ============================================================

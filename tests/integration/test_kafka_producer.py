@@ -16,7 +16,6 @@ from src.producers.kafka_producer import ResilientKafkaProducer
 from src.producers.api_client import RandomUserAPIClient
 from src.exceptions.custom_exceptions import (
     KafkaConnectionError,
-    KafkaPublishError,
     DataValidationError
 )
 

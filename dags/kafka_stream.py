@@ -43,8 +43,7 @@ def stream_data():
     1. Initialize components (API client, Kafka producer, Transformer)
     2. Run continuously for the configured duration
     3. Each iteration: fetch API data -> validate -> transform -> send to Kafka
-    4. Record metrics and logs
-    5. Send validation failures to DLQ
+    4. Send validation failures to DLQ
     """
     settings = get_settings()
 
@@ -79,7 +78,6 @@ def stream_data():
                         "API response validation failed",
                         extra={"errors": errors}
                     )
-                    metrics.increment("validation_failures")
                     # Send validation failures to DLQ
                     producer._send_to_dlq(
                         original_data=api_response,
@@ -91,18 +89,14 @@ def stream_data():
                     continue
 
                 # 3. Transform data
-                with metrics.timer("transformation"):
-                    # Extract raw data (Pydantic model -> dict)
-                    raw_user = api_response['results'][0]
-                    transformed = transformer.transform(raw_user)
+                raw_user = api_response['results'][0]
+                transformed = transformer.transform(raw_user)
 
                 # 4. Send to Kafka
-                with metrics.timer("kafka_send"):
-                    success = producer.send(transformed)
+                success = producer.send(transformed)
 
                 if success:
                     success_count += 1
-                    metrics.increment("messages_sent")
                     logger.debug(
                         "Message sent successfully",
                         extra={
@@ -112,7 +106,6 @@ def stream_data():
                     )
                 else:
                     failure_count += 1
-                    metrics.increment("messages_failed")
 
                 # Throttle send rate (~1 message per second)
                 time.sleep(1)
@@ -122,7 +115,6 @@ def stream_data():
                     f"API error: {e}",
                     extra={"error_type": type(e).__name__}
                 )
-                metrics.increment("api_errors")
                 failure_count += 1
                 # API errors skip DLQ (no data to send)
                 continue
@@ -132,7 +124,6 @@ def stream_data():
                     f"Transformation error: {e}",
                     extra={"error_type": type(e).__name__}
                 )
-                metrics.increment("transformation_errors")
                 failure_count += 1
                 continue
 
@@ -141,7 +132,6 @@ def stream_data():
                     f"Unexpected error: {e}",
                     extra={"error_type": type(e).__name__}
                 )
-                metrics.increment("unexpected_errors")
                 failure_count += 1
                 continue
 
@@ -157,8 +147,6 @@ def stream_data():
         }
     )
 
-    # Output metrics summary
-    metrics.log_summary()
 
 
 # DAG definition
