@@ -1,17 +1,16 @@
 """Dead Letter Queue Consumer"""
 
 import json
-import time
-from datetime import datetime, timedelta
-from typing import Optional, Callable, Dict, Any, List
 from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional
 
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 
 from ..config.settings import get_settings
-from ..utils.logging_config import get_logger
 from ..exceptions.custom_exceptions import KafkaConnectionError
+from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -19,6 +18,7 @@ logger = get_logger(__name__)
 @dataclass
 class DLQMessage:
     """Structured representation of a DLQ message."""
+
     original_message: Dict[str, Any]
     error_message: str
     error_type: str
@@ -32,10 +32,10 @@ class DLQMessage:
     def is_retryable(self) -> bool:
         """Whether this message is eligible for retry."""
         retryable_errors = [
-            'ConnectionError',
-            'TimeoutError',
-            'CassandraWriteError',
-            'KafkaConnectionError',
+            "ConnectionError",
+            "TimeoutError",
+            "CassandraWriteError",
+            "KafkaConnectionError",
         ]
         return self.error_type in retryable_errors and self.retry_count < 3
 
@@ -43,7 +43,7 @@ class DLQMessage:
     def age_hours(self) -> float:
         """Age of the message in the DLQ, in hours."""
         try:
-            msg_time = datetime.fromisoformat(self.timestamp.replace('Z', '+00:00'))
+            msg_time = datetime.fromisoformat(self.timestamp.replace("Z", "+00:00"))
             return (datetime.now(msg_time.tzinfo) - msg_time).total_seconds() / 3600
         except (ValueError, AttributeError):
             return 0.0
@@ -52,6 +52,7 @@ class DLQMessage:
 @dataclass
 class DLQStats:
     """DLQ statistics."""
+
     total_messages: int = 0
     retryable_count: int = 0
     non_retryable_count: int = 0
@@ -60,11 +61,11 @@ class DLQStats:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'total_messages': self.total_messages,
-            'retryable_count': self.retryable_count,
-            'non_retryable_count': self.non_retryable_count,
-            'error_type_counts': self.error_type_counts,
-            'oldest_message_hours': round(self.oldest_message_hours, 2)
+            "total_messages": self.total_messages,
+            "retryable_count": self.retryable_count,
+            "non_retryable_count": self.non_retryable_count,
+            "error_type_counts": self.error_type_counts,
+            "oldest_message_hours": round(self.oldest_message_hours, 2),
         }
 
 
@@ -80,7 +81,7 @@ class DLQConsumer:
         self,
         topic: Optional[str] = None,
         group_id: Optional[str] = None,
-        auto_commit: bool = False
+        auto_commit: bool = False,
     ):
         """
         Initialize DLQ Consumer.
@@ -99,10 +100,10 @@ class DLQConsumer:
         logger.info(
             "DLQConsumer initialized",
             extra={
-                'topic': self.topic,
-                'group_id': self.group_id,
-                'auto_commit': self.auto_commit
-            }
+                "topic": self.topic,
+                "group_id": self.group_id,
+                "auto_commit": self.auto_commit,
+            },
         )
 
     def _create_consumer(self) -> KafkaConsumer:
@@ -112,10 +113,10 @@ class DLQConsumer:
                 self.topic,
                 bootstrap_servers=self.settings.kafka.bootstrap_servers,
                 group_id=self.group_id,
-                auto_offset_reset='earliest',
+                auto_offset_reset="earliest",
                 enable_auto_commit=self.auto_commit,
-                value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-                consumer_timeout_ms=5000
+                value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+                consumer_timeout_ms=5000,
             )
             logger.info("Kafka consumer created successfully")
             return consumer
@@ -135,14 +136,14 @@ class DLQConsumer:
         value = raw_message.value
 
         return DLQMessage(
-            original_message=value.get('original_message', {}),
-            error_message=value.get('error', 'Unknown error'),
-            error_type=value.get('error_type', 'Unknown'),
-            timestamp=value.get('timestamp', ''),
-            topic=value.get('topic', ''),
+            original_message=value.get("original_message", {}),
+            error_message=value.get("error", "Unknown error"),
+            error_type=value.get("error_type", "Unknown"),
+            timestamp=value.get("timestamp", ""),
+            topic=value.get("topic", ""),
             partition=raw_message.partition,
             offset=raw_message.offset,
-            retry_count=value.get('retry_count', 0)
+            retry_count=value.get("retry_count", 0),
         )
 
     def analyze_dlq(self, max_messages: int = 1000) -> DLQStats:
@@ -175,8 +176,9 @@ class DLQConsumer:
                     stats.non_retryable_count += 1
 
                 error_type = msg.error_type
-                stats.error_type_counts[error_type] = \
+                stats.error_type_counts[error_type] = (
                     stats.error_type_counts.get(error_type, 0) + 1
+                )
 
                 if msg.age_hours > oldest_hours:
                     oldest_hours = msg.age_hours
@@ -189,17 +191,14 @@ class DLQConsumer:
 
         stats.oldest_message_hours = oldest_hours
 
-        logger.info(
-            "DLQ analysis complete",
-            extra=stats.to_dict()
-        )
+        logger.info("DLQ analysis complete", extra=stats.to_dict())
 
         logger.info(
             "DLQ gauge update",
             extra={
-                'dlq_total_messages': stats.total_messages,
-                'dlq_retryable_messages': stats.retryable_count
-            }
+                "dlq_total_messages": stats.total_messages,
+                "dlq_retryable_messages": stats.retryable_count,
+            },
         )
 
         return stats
@@ -208,7 +207,7 @@ class DLQConsumer:
         self,
         handler: Callable[[DLQMessage], bool],
         max_messages: Optional[int] = None,
-        commit_on_success: bool = True
+        commit_on_success: bool = True,
     ) -> Dict[str, int]:
         """
         Process messages from the DLQ using the provided handler.
@@ -224,7 +223,9 @@ class DLQConsumer:
         processed = 0
         failed = 0
 
-        logger.info(f"Starting to process DLQ messages (max: {max_messages or 'unlimited'})")
+        logger.info(
+            f"Starting to process DLQ messages (max: {max_messages or 'unlimited'})"
+        )
 
         for raw_message in self.consumer:
             if max_messages and processed + failed >= max_messages:
@@ -243,7 +244,7 @@ class DLQConsumer:
                     logger.debug("Incremented dlq_messages_processed")
                     logger.debug(
                         "DLQ message processed",
-                        extra={'offset': msg.offset, 'error_type': msg.error_type}
+                        extra={"offset": msg.offset, "error_type": msg.error_type},
                     )
                 else:
                     failed += 1
@@ -255,17 +256,16 @@ class DLQConsumer:
                 logger.debug("Incremented dlq_processing_errors")
 
         logger.info(
-            "DLQ processing complete",
-            extra={'processed': processed, 'failed': failed}
+            "DLQ processing complete", extra={"processed": processed, "failed": failed}
         )
 
-        return {'processed': processed, 'failed': failed}
+        return {"processed": processed, "failed": failed}
 
     def retry_messages(
         self,
         target_topic: Optional[str] = None,
         max_messages: int = 100,
-        only_retryable: bool = True
+        only_retryable: bool = True,
     ) -> Dict[str, int]:
         """
         Retry DLQ messages by re-sending them to the target topic.
@@ -280,7 +280,7 @@ class DLQConsumer:
         """
         from ..producers.kafka_producer import ResilientKafkaProducer
 
-        stats = {'retried': 0, 'skipped': 0, 'failed': 0}
+        stats = {"retried": 0, "skipped": 0, "failed": 0}
 
         logger.info(
             f"Starting DLQ retry (max: {max_messages}, only_retryable: {only_retryable})"
@@ -296,35 +296,40 @@ class DLQConsumer:
                     msg = self._parse_dlq_message(raw_message)
 
                     if only_retryable and not msg.is_retryable:
-                        stats['skipped'] += 1
+                        stats["skipped"] += 1
                         logger.debug(
-                            f"Skipping non-retryable message",
-                            extra={'error_type': msg.error_type, 'retry_count': msg.retry_count}
+                            "Skipping non-retryable message",
+                            extra={
+                                "error_type": msg.error_type,
+                                "retry_count": msg.retry_count,
+                            },
                         )
                         count += 1
                         continue
 
-                    topic = target_topic or msg.topic or self.settings.kafka.topic_user_data
+                    topic = (
+                        target_topic or msg.topic or self.settings.kafka.topic_user_data
+                    )
 
-                    msg.original_message['_retry_count'] = msg.retry_count + 1
+                    msg.original_message["_retry_count"] = msg.retry_count + 1
 
                     success = producer.send(topic, msg.original_message)
 
                     if success:
-                        stats['retried'] += 1
+                        stats["retried"] += 1
                         if not self.auto_commit:
                             self.consumer.commit()
                         logger.info(
                             "Message retried successfully",
-                            extra={'topic': topic, 'retry_count': msg.retry_count + 1}
+                            extra={"topic": topic, "retry_count": msg.retry_count + 1},
                         )
                     else:
-                        stats['failed'] += 1
+                        stats["failed"] += 1
 
                     count += 1
 
                 except Exception as e:
-                    stats['failed'] += 1
+                    stats["failed"] += 1
                     logger.error(f"Error retrying message: {e}")
                     count += 1
 
@@ -368,5 +373,3 @@ class DLQConsumer:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
         return False
-
-

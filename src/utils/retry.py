@@ -1,17 +1,15 @@
 """Retry Logic with Exponential Backoff"""
 
-import time
-import random
 import functools
 import logging
-from typing import Tuple, Type, Callable, Optional, TypeVar
-
-from src.exceptions.custom_exceptions import is_retryable
+import random
+import time
+from typing import Callable, Optional, Tuple, Type, TypeVar
 
 logger = logging.getLogger(__name__)
 
 # Type variable for generic return type
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def exponential_backoff_retry(
@@ -22,7 +20,7 @@ def exponential_backoff_retry(
     jitter: bool = True,
     retryable_exceptions: Tuple[Type[Exception], ...] = (Exception,),
     on_retry: Optional[Callable[[Exception, int], None]] = None,
-    on_failure: Optional[Callable[[Exception, int], None]] = None
+    on_failure: Optional[Callable[[Exception, int], None]] = None,
 ) -> Callable:
     """
     Decorator for exponential backoff retry logic.
@@ -48,6 +46,7 @@ def exponential_backoff_retry(
         on_retry: Callback invoked on each retry.
         on_failure: Callback invoked on final failure.
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> T:
@@ -70,8 +69,8 @@ def exponential_backoff_retry(
                                 "attempt": attempt + 1,
                                 "max_retries": max_retries,
                                 "error_type": type(e).__name__,
-                                "error_message": str(e)
-                            }
+                                "error_message": str(e),
+                            },
                         )
                         if on_failure:
                             on_failure(e, attempt + 1)
@@ -83,7 +82,7 @@ def exponential_backoff_retry(
                         base_delay=base_delay,
                         max_delay=max_delay,
                         exponential_base=exponential_base,
-                        jitter=jitter
+                        jitter=jitter,
                     )
 
                     # Log retry info
@@ -95,8 +94,8 @@ def exponential_backoff_retry(
                             "attempt": attempt + 1,
                             "delay_seconds": delay,
                             "error_type": type(e).__name__,
-                            "error_message": str(e)
-                        }
+                            "error_message": str(e),
+                        },
                     )
 
                     # Invoke on_retry callback
@@ -110,6 +109,7 @@ def exponential_backoff_retry(
             raise last_exception  # type: ignore
 
         return wrapper
+
     return decorator
 
 
@@ -118,11 +118,11 @@ def _calculate_delay(
     base_delay: float,
     max_delay: float,
     exponential_base: float,
-    jitter: bool
+    jitter: bool,
 ) -> float:
     """Calculate delay: min(base_delay * (exponential_base ** attempt), max_delay)."""
     # Base exponential delay
-    delay = base_delay * (exponential_base ** attempt)
+    delay = base_delay * (exponential_base**attempt)
 
     # Cap at max_delay
     delay = min(delay, max_delay)

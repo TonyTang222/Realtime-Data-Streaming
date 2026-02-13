@@ -2,12 +2,12 @@
 Pytest Configuration and Fixtures
 """
 
-import pytest
-import json
 import sys
 from pathlib import Path
+from typing import Any, Dict
 from unittest.mock import MagicMock, patch
-from typing import Dict, Any
+
+import pytest
 
 # Ensure src is on the Python path
 project_root = Path(__file__).parent.parent
@@ -18,60 +18,45 @@ sys.path.insert(0, str(project_root))
 # Sample Data Fixtures
 # ============================================================
 
+
 @pytest.fixture
 def sample_api_response() -> Dict[str, Any]:
     """Sample response from the randomuser.me API."""
     return {
-        "results": [{
-            "gender": "male",
-            "name": {
-                "title": "Mr",
-                "first": "John",
-                "last": "Doe"
-            },
-            "location": {
-                "street": {
-                    "number": 123,
-                    "name": "Main Street"
+        "results": [
+            {
+                "gender": "male",
+                "name": {"title": "Mr", "first": "John", "last": "Doe"},
+                "location": {
+                    "street": {"number": 123, "name": "Main Street"},
+                    "city": "New York",
+                    "state": "NY",
+                    "country": "USA",
+                    "postcode": "10001",
                 },
-                "city": "New York",
-                "state": "NY",
-                "country": "USA",
-                "postcode": "10001"
-            },
-            "email": "john.doe@example.com",
-            "login": {
-                "uuid": "abc123",
-                "username": "johndoe",
-                "password": "secret",
-                "salt": "xyz",
-                "md5": "...",
-                "sha1": "...",
-                "sha256": "..."
-            },
-            "dob": {
-                "date": "1990-01-15T10:30:00.000Z",
-                "age": 34
-            },
-            "registered": {
-                "date": "2020-05-20T08:00:00.000Z",
-                "age": 4
-            },
-            "phone": "555-1234",
-            "cell": "555-5678",
-            "picture": {
-                "large": "https://example.com/large.jpg",
-                "medium": "https://example.com/medium.jpg",
-                "thumbnail": "https://example.com/thumb.jpg"
-            },
-            "nat": "US"
-        }],
-        "info": {
-            "seed": "test",
-            "results": 1,
-            "page": 1,
-            "version": "1.4"
-        }
+                "email": "john.doe@example.com",
+                "login": {
+                    "uuid": "abc123",
+                    "username": "johndoe",
+                    "password": "secret",
+                    "salt": "xyz",
+                    "md5": "...",
+                    "sha1": "...",
+                    "sha256": "...",
+                },
+                "dob": {"date": "1990-01-15T10:30:00.000Z", "age": 34},
+                "registered": {"date": "2020-05-20T08:00:00.000Z", "age": 4},
+                "phone": "555-1234",
+                "cell": "555-5678",
+                "picture": {
+                    "large": "https://example.com/large.jpg",
+                    "medium": "https://example.com/medium.jpg",
+                    "thumbnail": "https://example.com/thumb.jpg",
+                },
+                "nat": "US",
+            }
+        ],
+        "info": {"seed": "test", "results": 1, "page": 1, "version": "1.4"},
     }
 
 
@@ -89,7 +74,7 @@ def sample_transformed_user() -> Dict[str, Any]:
         "dob": "1990-01-15T10:30:00.000Z",
         "registered_date": "2020-05-20T08:00:00.000Z",
         "phone": "555-1234",
-        "picture": "https://example.com/medium.jpg"
+        "picture": "https://example.com/medium.jpg",
     }
 
 
@@ -97,15 +82,14 @@ def sample_transformed_user() -> Dict[str, Any]:
 def invalid_api_response() -> Dict[str, Any]:
     """Invalid API response for error handling tests."""
     return {
-        "results": [{
-            "gender": "unknown",  # Invalid gender
-            "name": {
-                "first": "",      # Empty name
-                "last": ""
-            },
-            "email": "not-an-email",  # Invalid email
-            # Missing other required fields
-        }]
+        "results": [
+            {
+                "gender": "unknown",  # Invalid gender
+                "name": {"first": "", "last": ""},  # Empty name
+                "email": "not-an-email",  # Invalid email
+                # Missing other required fields
+            }
+        ]
     }
 
 
@@ -125,10 +109,11 @@ def malformed_api_response() -> str:
 # Mock Fixtures
 # ============================================================
 
+
 @pytest.fixture
 def mock_kafka_producer():
     """Mock Kafka Producer."""
-    with patch('kafka.KafkaProducer') as mock_class:
+    with patch("kafka.KafkaProducer") as mock_class:
         # Create mock instance
         mock_instance = MagicMock()
         mock_class.return_value = mock_instance
@@ -136,9 +121,7 @@ def mock_kafka_producer():
         # Mock send() to return a Future
         mock_future = MagicMock()
         mock_future.get.return_value = MagicMock(
-            topic='user_data',
-            partition=0,
-            offset=12345
+            topic="user_data", partition=0, offset=12345
         )
         mock_instance.send.return_value = mock_future
 
@@ -148,7 +131,7 @@ def mock_kafka_producer():
 @pytest.fixture
 def mock_cassandra_session():
     """Mock Cassandra Session."""
-    with patch('cassandra.cluster.Cluster') as mock_cluster:
+    with patch("cassandra.cluster.Cluster") as mock_cluster:
         mock_session = MagicMock()
         mock_cluster.return_value.connect.return_value = mock_session
         yield mock_session
@@ -157,14 +140,14 @@ def mock_cassandra_session():
 @pytest.fixture
 def mock_requests_get():
     """Mock requests.get()."""
-    with patch('requests.get') as mock_get:
+    with patch("requests.get") as mock_get:
         yield mock_get
 
 
 @pytest.fixture
 def mock_requests_session():
     """Mock requests.Session."""
-    with patch('requests.Session') as mock_session_class:
+    with patch("requests.Session") as mock_session_class:
         mock_session = MagicMock()
         mock_session_class.return_value = mock_session
         yield mock_session
@@ -174,20 +157,25 @@ def mock_requests_session():
 # Environment Fixtures
 # ============================================================
 
+
 @pytest.fixture
 def test_settings():
     """Test settings that override defaults."""
-    with patch.dict('os.environ', {
-        'ENVIRONMENT': 'development',
-        'KAFKA_BOOTSTRAP_SERVERS': 'localhost:9092',
-        'KAFKA_TOPIC_USER_DATA': 'test_user_data',
-        'KAFKA_TOPIC_DLQ': 'test_user_data_dlq',
-        'CASSANDRA_HOSTS': 'localhost',
-        'LOG_LEVEL': 'DEBUG',
-        'LOG_JSON_FORMAT': 'false',
-    }):
+    with patch.dict(
+        "os.environ",
+        {
+            "ENVIRONMENT": "development",
+            "KAFKA_BOOTSTRAP_SERVERS": "localhost:9092",
+            "KAFKA_TOPIC_USER_DATA": "test_user_data",
+            "KAFKA_TOPIC_DLQ": "test_user_data_dlq",
+            "CASSANDRA_HOSTS": "localhost",
+            "LOG_LEVEL": "DEBUG",
+            "LOG_JSON_FORMAT": "false",
+        },
+    ):
         # Reload settings
         from src.config.settings import reload_settings
+
         settings = reload_settings()
         yield settings
 
@@ -195,6 +183,7 @@ def test_settings():
 # ============================================================
 # Utility Fixtures
 # ============================================================
+
 
 @pytest.fixture
 def temp_checkpoint_dir(tmp_path):

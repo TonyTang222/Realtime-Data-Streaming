@@ -2,33 +2,21 @@
 Unit Tests for Data Schemas
 """
 
-import pytest
 import json
-import uuid
-import sys
-from pathlib import Path
 from datetime import datetime
+
+import pytest
 from pydantic import ValidationError
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 from src.config.schemas import (
-    # Models
-    StreetInfo,
-    LocationInfo,
-    NameInfo,
-    LoginInfo,
-    DOBInfo,
-    RegisteredInfo,
-    PictureInfo,
-    UserAPIResponse,
-    TransformedUser,
+    SPARK_USER_SCHEMA,
     DLQMessage,
-    # Validation functions
+    LocationInfo,
+    StreetInfo,
+    TransformedUser,
+    UserAPIResponse,
     validate_api_response,
     validate_transformed_data,
-    # Spark schema
-    SPARK_USER_SCHEMA,
 )
 
 
@@ -61,7 +49,7 @@ class TestLocationInfo:
             city="New York",
             state="NY",
             country="USA",
-            postcode="10001"
+            postcode="10001",
         )
         assert location.city == "New York"
         assert location.postcode == "10001"
@@ -73,7 +61,7 @@ class TestLocationInfo:
             city="Berlin",
             state="Berlin",
             country="Germany",
-            postcode=10115  # Numeric
+            postcode=10115,  # Numeric
         )
         assert location.postcode == "10115"
         assert isinstance(location.postcode, str)
@@ -85,7 +73,7 @@ class TestLocationInfo:
             city="Tokyo",
             state="Tokyo",
             country="Japan",
-            postcode=None
+            postcode=None,
         )
         assert location.postcode == ""
 
@@ -96,7 +84,7 @@ class TestUserAPIResponse:
     @pytest.fixture
     def valid_user_data(self, sample_api_response):
         """Get user data from sample_api_response."""
-        return sample_api_response['results'][0]
+        return sample_api_response["results"][0]
 
     def test_valid_user_response(self, valid_user_data):
         """Test valid user response."""
@@ -107,32 +95,32 @@ class TestUserAPIResponse:
 
     def test_invalid_gender_normalized(self, valid_user_data):
         """Test invalid gender is normalized to 'other'."""
-        valid_user_data['gender'] = "unknown"
+        valid_user_data["gender"] = "unknown"
         user = UserAPIResponse.parse_obj(valid_user_data)
         assert user.gender == "other"
 
     def test_gender_case_normalized(self, valid_user_data):
         """Test gender case normalization."""
-        valid_user_data['gender'] = "MALE"
+        valid_user_data["gender"] = "MALE"
         user = UserAPIResponse.parse_obj(valid_user_data)
         assert user.gender == "male"
 
     def test_email_case_normalized(self, valid_user_data):
         """Test email is lowercased."""
-        valid_user_data['email'] = "John.Doe@EXAMPLE.COM"
+        valid_user_data["email"] = "John.Doe@EXAMPLE.COM"
         user = UserAPIResponse.parse_obj(valid_user_data)
         assert user.email == "john.doe@example.com"
 
     def test_invalid_email_raises_error(self, valid_user_data):
         """Test invalid email raises error."""
-        valid_user_data['email'] = "not-an-email"
+        valid_user_data["email"] = "not-an-email"
         with pytest.raises(ValidationError) as exc_info:
             UserAPIResponse.parse_obj(valid_user_data)
         assert "email" in str(exc_info.value).lower()
 
     def test_missing_required_field_raises_error(self, valid_user_data):
         """Test missing required field raises error."""
-        del valid_user_data['name']
+        del valid_user_data["name"]
         with pytest.raises(ValidationError):
             UserAPIResponse.parse_obj(valid_user_data)
 
@@ -152,37 +140,37 @@ class TestTransformedUser:
 
     def test_invalid_uuid_raises_error(self, valid_transformed_data):
         """Test invalid UUID raises error."""
-        valid_transformed_data['id'] = "not-a-uuid"
+        valid_transformed_data["id"] = "not-a-uuid"
         with pytest.raises(ValidationError):
             TransformedUser.parse_obj(valid_transformed_data)
 
     def test_uuid_format_validated(self, valid_transformed_data):
         """Test UUID format validation."""
-        valid_transformed_data['id'] = "550e8400-e29b-41d4-a716-446655440000"
+        valid_transformed_data["id"] = "550e8400-e29b-41d4-a716-446655440000"
         user = TransformedUser.parse_obj(valid_transformed_data)
         assert user.id == "550e8400-e29b-41d4-a716-446655440000"
 
     def test_invalid_gender_raises_error(self, valid_transformed_data):
         """Test invalid gender raises error."""
-        valid_transformed_data['gender'] = "unknown"
+        valid_transformed_data["gender"] = "unknown"
         with pytest.raises(ValidationError):
             TransformedUser.parse_obj(valid_transformed_data)
 
     def test_empty_first_name_raises_error(self, valid_transformed_data):
         """Test empty first name raises error."""
-        valid_transformed_data['first_name'] = ""
+        valid_transformed_data["first_name"] = ""
         with pytest.raises(ValidationError):
             TransformedUser.parse_obj(valid_transformed_data)
 
     def test_name_too_long_raises_error(self, valid_transformed_data):
         """Test name too long raises error."""
-        valid_transformed_data['first_name'] = "A" * 101
+        valid_transformed_data["first_name"] = "A" * 101
         with pytest.raises(ValidationError):
             TransformedUser.parse_obj(valid_transformed_data)
 
     def test_extra_fields_forbidden(self, valid_transformed_data):
         """Test extra fields are forbidden."""
-        valid_transformed_data['extra_field'] = "not allowed"
+        valid_transformed_data["extra_field"] = "not allowed"
         with pytest.raises(ValidationError):
             TransformedUser.parse_obj(valid_transformed_data)
 
@@ -198,7 +186,7 @@ class TestDLQMessage:
             error_message="Invalid email",
             timestamp="2024-01-15T10:30:00Z",
             retry_count=0,
-            source_topic="user_data"
+            source_topic="user_data",
         )
 
         assert message.original_message == '{"user": "data"}'
@@ -214,7 +202,7 @@ class TestDLQMessage:
             original_message=original,
             error=error,
             source_topic="user_data",
-            retry_count=2
+            retry_count=2,
         )
 
         assert message.error_type == "ValueError"
@@ -228,14 +216,14 @@ class TestDLQMessage:
 
     def test_from_error_handles_non_serializable(self):
         """Test from_error() handles non-serializable data."""
-        original = {"datetime": datetime.now()}  # datetime is not directly JSON-serializable
+        original = {
+            "datetime": datetime.now()
+        }  # datetime is not directly JSON-serializable
         error = Exception("Test error")
 
         # Should not raise (uses default=str fallback)
         message = DLQMessage.from_error(
-            original_message=original,
-            error=error,
-            source_topic="test_topic"
+            original_message=original, error=error, source_topic="test_topic"
         )
 
         assert message.original_message is not None
@@ -278,10 +266,12 @@ class TestValidateAPIResponse:
     def test_invalid_user_data(self):
         """Test invalid user data."""
         invalid_response = {
-            "results": [{
-                "gender": "male",
-                # Missing required fields
-            }]
+            "results": [
+                {
+                    "gender": "male",
+                    # Missing required fields
+                }
+            ]
         }
 
         is_valid, data, errors = validate_api_response(invalid_response)
@@ -304,7 +294,7 @@ class TestValidateTransformedData:
 
     def test_invalid_uuid(self, sample_transformed_user):
         """Test invalid UUID."""
-        sample_transformed_user['id'] = "invalid-uuid"
+        sample_transformed_user["id"] = "invalid-uuid"
         is_valid, data, errors = validate_transformed_data(sample_transformed_user)
 
         assert is_valid is False
@@ -312,7 +302,7 @@ class TestValidateTransformedData:
 
     def test_missing_field(self, sample_transformed_user):
         """Test missing field."""
-        del sample_transformed_user['email']
+        del sample_transformed_user["email"]
         is_valid, data, errors = validate_transformed_data(sample_transformed_user)
 
         assert is_valid is False
@@ -327,8 +317,17 @@ class TestSparkUserSchema:
         field_names = [field.name for field in SPARK_USER_SCHEMA.fields]
 
         required_fields = [
-            'id', 'first_name', 'last_name', 'gender', 'address',
-            'email', 'username', 'dob', 'registered_date', 'phone', 'picture'
+            "id",
+            "first_name",
+            "last_name",
+            "gender",
+            "address",
+            "email",
+            "username",
+            "dob",
+            "registered_date",
+            "phone",
+            "picture",
         ]
 
         for field in required_fields:
@@ -339,17 +338,18 @@ class TestSparkUserSchema:
         from pyspark.sql.types import StringType
 
         for field in SPARK_USER_SCHEMA.fields:
-            assert isinstance(field.dataType, StringType), \
-                f"Field {field.name} should be StringType"
+            assert isinstance(
+                field.dataType, StringType
+            ), f"Field {field.name} should be StringType"
 
     def test_nullable_fields(self):
         """Test nullable fields."""
-        nullable_fields = {'dob'}  # Only dob is nullable
+        nullable_fields = {"dob"}  # Only dob is nullable
 
         for field in SPARK_USER_SCHEMA.fields:
             if field.name in nullable_fields:
-                assert field.nullable is True, \
-                    f"Field {field.name} should be nullable"
+                assert field.nullable is True, f"Field {field.name} should be nullable"
             else:
-                assert field.nullable is False, \
-                    f"Field {field.name} should not be nullable"
+                assert (
+                    field.nullable is False
+                ), f"Field {field.name} should not be nullable"

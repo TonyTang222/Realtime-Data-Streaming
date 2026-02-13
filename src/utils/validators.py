@@ -1,15 +1,11 @@
 """Input Validation Utilities"""
 
-from typing import Any, Dict, Optional, TypeVar, List
+from typing import Any, Dict, List, Optional, TypeVar
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
-def safe_get_nested(
-    data: Dict[str, Any],
-    *keys: str,
-    default: T = None
-) -> T:
+def safe_get_nested(data: Dict[str, Any], *keys: str, default: T = None) -> T:
     """
     Safely access a nested dictionary.
 
@@ -42,10 +38,7 @@ def safe_get_nested(
 
 
 def sanitize_string(
-    value: Any,
-    default: str = "",
-    max_length: Optional[int] = None,
-    strip: bool = True
+    value: Any, default: str = "", max_length: Optional[int] = None, strip: bool = True
 ) -> str:
     """
     Sanitize a value into a clean string.
@@ -88,8 +81,7 @@ def sanitize_email(email: Any) -> str:
 
 
 def validate_required_fields(
-    data: Dict[str, Any],
-    required_fields: List[str]
+    data: Dict[str, Any], required_fields: List[str]
 ) -> List[str]:
     """Return a list of field names that are missing or empty in data."""
     missing = []

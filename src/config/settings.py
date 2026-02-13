@@ -2,12 +2,13 @@
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional
 from enum import Enum
+from typing import Optional
 
 
 class Environment(Enum):
     """Execution environment."""
+
     DEVELOPMENT = "development"
     STAGING = "staging"
     PRODUCTION = "production"
@@ -16,6 +17,7 @@ class Environment(Enum):
 @dataclass
 class KafkaConfig:
     """Kafka configuration."""
+
     # Broker connection
     bootstrap_servers: str = field(
         default_factory=lambda: os.getenv("KAFKA_BOOTSTRAP_SERVERS", "broker:29092")
@@ -30,12 +32,8 @@ class KafkaConfig:
     )
 
     # Producer settings
-    acks: str = field(
-        default_factory=lambda: os.getenv("KAFKA_ACKS", "all")
-    )
-    retries: int = field(
-        default_factory=lambda: int(os.getenv("KAFKA_RETRIES", "3"))
-    )
+    acks: str = field(default_factory=lambda: os.getenv("KAFKA_ACKS", "all"))
+    retries: int = field(default_factory=lambda: int(os.getenv("KAFKA_RETRIES", "3")))
     max_block_ms: int = field(
         default_factory=lambda: int(os.getenv("KAFKA_MAX_BLOCK_MS", "5000"))
     )
@@ -52,12 +50,11 @@ class KafkaConfig:
 @dataclass
 class CassandraConfig:
     """Cassandra configuration."""
+
     hosts: str = field(
         default_factory=lambda: os.getenv("CASSANDRA_HOSTS", "cassandra")
     )
-    port: int = field(
-        default_factory=lambda: int(os.getenv("CASSANDRA_PORT", "9042"))
-    )
+    port: int = field(default_factory=lambda: int(os.getenv("CASSANDRA_PORT", "9042")))
     keyspace: str = field(
         default_factory=lambda: os.getenv("CASSANDRA_KEYSPACE", "spark_streams")
     )
@@ -84,23 +81,24 @@ class CassandraConfig:
 @dataclass
 class SparkConfig:
     """Spark configuration."""
+
     app_name: str = field(
         default_factory=lambda: os.getenv("SPARK_APP_NAME", "UserDataStreaming")
     )
     master: str = field(
         default_factory=lambda: os.getenv("SPARK_MASTER", "spark://spark-master:7077")
     )
-    log_level: str = field(
-        default_factory=lambda: os.getenv("SPARK_LOG_LEVEL", "WARN")
-    )
+    log_level: str = field(default_factory=lambda: os.getenv("SPARK_LOG_LEVEL", "WARN"))
     checkpoint_location: str = field(
-        default_factory=lambda: os.getenv("SPARK_CHECKPOINT_LOCATION", "/tmp/checkpoint")
+        default_factory=lambda: os.getenv(
+            "SPARK_CHECKPOINT_LOCATION", "/tmp/checkpoint"
+        )
     )
     packages: str = field(
         default_factory=lambda: os.getenv(
             "SPARK_PACKAGES",
             "org.apache.spark:spark-sql-kafka-0-10_2.12:3.4.1,"
-            "com.datastax.spark:spark-cassandra-connector_2.12:3.4.1"
+            "com.datastax.spark:spark-cassandra-connector_2.12:3.4.1",
         )
     )
 
@@ -108,6 +106,7 @@ class SparkConfig:
 @dataclass
 class APIConfig:
     """External API configuration."""
+
     base_url: str = field(
         default_factory=lambda: os.getenv("API_BASE_URL", "https://randomuser.me/api/")
     )
@@ -125,6 +124,7 @@ class APIConfig:
 @dataclass
 class RetryConfig:
     """Retry behavior configuration."""
+
     max_retries: int = field(
         default_factory=lambda: int(os.getenv("RETRY_MAX_RETRIES", "3"))
     )
@@ -142,13 +142,11 @@ class RetryConfig:
 @dataclass
 class LoggingConfig:
     """Logging configuration."""
-    level: str = field(
-        default_factory=lambda: os.getenv("LOG_LEVEL", "INFO")
-    )
+
+    level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
     format: str = field(
         default_factory=lambda: os.getenv(
-            "LOG_FORMAT",
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            "LOG_FORMAT", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
     )
     json_format: bool = field(
@@ -159,11 +157,10 @@ class LoggingConfig:
 @dataclass
 class Settings:
     """Main settings container aggregating all component configs."""
+
     # Execution environment
     environment: Environment = field(
-        default_factory=lambda: Environment(
-            os.getenv("ENVIRONMENT", "development")
-        )
+        default_factory=lambda: Environment(os.getenv("ENVIRONMENT", "development"))
     )
 
     # Component configs

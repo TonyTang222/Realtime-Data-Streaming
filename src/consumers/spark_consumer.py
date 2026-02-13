@@ -4,11 +4,15 @@ import logging
 from typing import Optional
 
 from cassandra.cluster import Cluster
-from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.functions import from_json, col
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql.functions import col, from_json
 
-from ..config.settings import get_settings, Settings
-from ..config.schemas import SPARK_USER_SCHEMA, CASSANDRA_CREATE_KEYSPACE_CQL, CASSANDRA_CREATE_TABLE_CQL
+from ..config.schemas import (
+    CASSANDRA_CREATE_KEYSPACE_CQL,
+    CASSANDRA_CREATE_TABLE_CQL,
+    SPARK_USER_SCHEMA,
+)
+from ..config.settings import Settings, get_settings
 from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -38,10 +42,10 @@ class SparkStreamingConsumer:
         logger.info(
             "SparkStreamingConsumer initialized",
             extra={
-                'kafka_servers': self.settings.kafka.bootstrap_servers,
-                'kafka_topic': self.settings.kafka.topic_user_data,
-                'cassandra_keyspace': self.settings.cassandra.keyspace
-            }
+                "kafka_servers": self.settings.kafka.bootstrap_servers,
+                "kafka_topic": self.settings.kafka.topic_user_data,
+                "cassandra_keyspace": self.settings.cassandra.keyspace,
+            },
         )
 
     def create_spark_connection(self) -> Optional[SparkSession]:
@@ -56,11 +60,14 @@ class SparkStreamingConsumer:
 
         try:
             self._spark = (
-                SparkSession.builder
-                .appName(self.settings.spark.app_name)
+                SparkSession.builder.appName(self.settings.spark.app_name)
                 .config("spark.jars.packages", self.settings.spark.packages)
-                .config("spark.cassandra.connection.host", self.settings.cassandra.hosts)
-                .config("spark.cassandra.connection.port", str(self.settings.cassandra.port))
+                .config(
+                    "spark.cassandra.connection.host", self.settings.cassandra.hosts
+                )
+                .config(
+                    "spark.cassandra.connection.port", str(self.settings.cassandra.port)
+                )
                 .getOrCreate()
             )
             self._spark.sparkContext.setLogLevel(self.settings.spark.log_level)
@@ -91,9 +98,10 @@ class SparkStreamingConsumer:
 
         try:
             spark_df = (
-                self.spark.readStream
-                .format("kafka")
-                .option("kafka.bootstrap.servers", self.settings.kafka.bootstrap_servers)
+                self.spark.readStream.format("kafka")
+                .option(
+                    "kafka.bootstrap.servers", self.settings.kafka.bootstrap_servers
+                )
                 .option("subscribe", self.settings.kafka.topic_user_data)
                 .option("startingOffsets", "earliest")
                 .load()
@@ -116,8 +124,7 @@ class SparkStreamingConsumer:
             Parsed DataFrame with all user fields.
         """
         selection_df = (
-            spark_df
-            .selectExpr("CAST(value AS STRING)")
+            spark_df.selectExpr("CAST(value AS STRING)")
             .select(from_json(col("value"), SPARK_USER_SCHEMA).alias("data"))
             .select("data.*")
         )
@@ -137,8 +144,7 @@ class SparkStreamingConsumer:
 
         try:
             cluster = Cluster(
-                self.settings.cassandra.hosts_list,
-                port=self.settings.cassandra.port
+                self.settings.cassandra.hosts_list, port=self.settings.cassandra.port
             )
             self._cassandra_session = cluster.connect()
             logger.info("Cassandra connection established")
@@ -157,7 +163,7 @@ class SparkStreamingConsumer:
         """
         cql = CASSANDRA_CREATE_KEYSPACE_CQL.format(
             keyspace=self.settings.cassandra.keyspace,
-            replication_factor=self.settings.cassandra.replication_factor
+            replication_factor=self.settings.cassandra.replication_factor,
         )
         session.execute(cql)
         logger.info(f"Keyspace '{self.settings.cassandra.keyspace}' created/verified")
@@ -171,7 +177,7 @@ class SparkStreamingConsumer:
         """
         cql = CASSANDRA_CREATE_TABLE_CQL.format(
             keyspace=self.settings.cassandra.keyspace,
-            table=self.settings.cassandra.table
+            table=self.settings.cassandra.table,
         )
         session.execute(cql)
         logger.info(f"Table '{self.settings.cassandra.table}' created/verified")
@@ -205,8 +211,7 @@ class SparkStreamingConsumer:
         logger.info("Starting streaming to Cassandra...")
 
         streaming_query = (
-            selection_df.writeStream
-            .format("org.apache.spark.sql.cassandra")
+            selection_df.writeStream.format("org.apache.spark.sql.cassandra")
             .option("checkpointLocation", self.settings.spark.checkpoint_location)
             .option("keyspace", self.settings.cassandra.keyspace)
             .option("table", self.settings.cassandra.table)

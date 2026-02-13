@@ -2,12 +2,9 @@
 Unit Tests for Retry Logic
 """
 
-import pytest
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+import pytest
 
 from src.utils.retry import exponential_backoff_retry
 
@@ -33,9 +30,7 @@ class TestExponentialBackoffRetry:
         call_count = 0
 
         @exponential_backoff_retry(
-            max_retries=2,
-            base_delay=0.01,
-            retryable_exceptions=(ValueError,)
+            max_retries=2, base_delay=0.01, retryable_exceptions=(ValueError,)
         )
         def flaky_func():
             nonlocal call_count
@@ -54,9 +49,7 @@ class TestExponentialBackoffRetry:
         call_count = 0
 
         @exponential_backoff_retry(
-            max_retries=2,
-            base_delay=0.01,
-            retryable_exceptions=(ValueError,)
+            max_retries=2, base_delay=0.01, retryable_exceptions=(ValueError,)
         )
         def always_fails():
             nonlocal call_count
@@ -73,9 +66,7 @@ class TestExponentialBackoffRetry:
         call_count = 0
 
         @exponential_backoff_retry(
-            max_retries=3,
-            base_delay=0.01,
-            retryable_exceptions=(ValueError,)
+            max_retries=3, base_delay=0.01, retryable_exceptions=(ValueError,)
         )
         def raises_type_error():
             nonlocal call_count
@@ -96,7 +87,7 @@ class TestExponentialBackoffRetry:
             max_retries=2,
             base_delay=0.01,
             retryable_exceptions=(ValueError,),
-            on_retry=callback
+            on_retry=callback,
         )
         def flaky_func():
             nonlocal call_count
@@ -117,7 +108,7 @@ class TestExponentialBackoffRetry:
             max_retries=1,
             base_delay=0.01,
             retryable_exceptions=(ValueError,),
-            on_failure=failure_callback
+            on_failure=failure_callback,
         )
         def always_fails():
             raise ValueError("Failed")
@@ -129,6 +120,7 @@ class TestExponentialBackoffRetry:
 
     def test_preserves_function_return_value(self):
         """Test return value is preserved."""
+
         @exponential_backoff_retry(max_retries=1, base_delay=0.01)
         def returns_dict():
             return {"key": "value", "number": 42}
@@ -139,6 +131,7 @@ class TestExponentialBackoffRetry:
 
     def test_preserves_function_arguments(self):
         """Test function arguments are preserved."""
+
         @exponential_backoff_retry(max_retries=1, base_delay=0.01)
         def add_numbers(a, b, c=0):
             return a + b + c
@@ -146,5 +139,3 @@ class TestExponentialBackoffRetry:
         result = add_numbers(1, 2, c=3)
 
         assert result == 6
-
-

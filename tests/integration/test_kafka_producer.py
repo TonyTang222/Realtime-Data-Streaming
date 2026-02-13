@@ -2,22 +2,12 @@
 Integration Tests for Kafka Producer
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-import json
-import sys
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
-from datetime import datetime
 
-# Ensure src is importable
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from src.producers.kafka_producer import ResilientKafkaProducer
 from src.producers.api_client import RandomUserAPIClient
-from src.exceptions.custom_exceptions import (
-    KafkaConnectionError,
-    DataValidationError
-)
+from src.producers.kafka_producer import ResilientKafkaProducer
 
 
 class TestResilientKafkaProducer:
@@ -26,16 +16,14 @@ class TestResilientKafkaProducer:
     @pytest.fixture
     def mock_kafka_producer(self):
         """Mock KafkaProducer class."""
-        with patch('src.producers.kafka_producer.KafkaProducer') as mock_class:
+        with patch("src.producers.kafka_producer.KafkaProducer") as mock_class:
             mock_instance = MagicMock()
             mock_class.return_value = mock_instance
 
             # Mock send() to return a Future
             mock_future = MagicMock()
             mock_future.get.return_value = MagicMock(
-                topic='user_data',
-                partition=0,
-                offset=12345
+                topic="user_data", partition=0, offset=12345
             )
             mock_instance.send.return_value = mock_future
 
@@ -43,30 +31,41 @@ class TestResilientKafkaProducer:
 
     def test_send_message_success(self, mock_kafka_producer, sample_transformed_user):
         """Test successful message sending."""
-        with patch('src.producers.kafka_producer.KafkaProducer', return_value=mock_kafka_producer):
+        with patch(
+            "src.producers.kafka_producer.KafkaProducer",
+            return_value=mock_kafka_producer,
+        ):
             producer = ResilientKafkaProducer()
             producer._producer = mock_kafka_producer
             producer._connected = True
 
-            result = producer.send(sample_transformed_user, topic='user_data')
+            result = producer.send(sample_transformed_user, topic="user_data")
 
             assert result is True
             mock_kafka_producer.send.assert_called_once()
 
     def test_send_message_with_key(self, mock_kafka_producer, sample_transformed_user):
         """Test sending a message with a key."""
-        with patch('src.producers.kafka_producer.KafkaProducer', return_value=mock_kafka_producer):
+        with patch(
+            "src.producers.kafka_producer.KafkaProducer",
+            return_value=mock_kafka_producer,
+        ):
             producer = ResilientKafkaProducer()
             producer._producer = mock_kafka_producer
             producer._connected = True
 
             # Should succeed
-            result = producer.send(sample_transformed_user, topic='user_data', key='user-123')
+            result = producer.send(
+                sample_transformed_user, topic="user_data", key="user-123"
+            )
             assert result is True
 
     def test_send_data_to_topic(self, mock_kafka_producer):
         """Test sending data to a specified topic."""
-        with patch('src.producers.kafka_producer.KafkaProducer', return_value=mock_kafka_producer):
+        with patch(
+            "src.producers.kafka_producer.KafkaProducer",
+            return_value=mock_kafka_producer,
+        ):
             producer = ResilientKafkaProducer()
             producer._producer = mock_kafka_producer
             producer._connected = True
@@ -74,7 +73,7 @@ class TestResilientKafkaProducer:
             data = {"incomplete": "data"}
 
             # Send data (producer does not validate, only sends)
-            result = producer.send(data, topic='user_data')
+            result = producer.send(data, topic="user_data")
 
             # producer.send should have been called
             assert mock_kafka_producer.send.called
@@ -88,46 +87,55 @@ class TestResilientKafkaProducer:
         mock_kafka_producer.send.side_effect = [
             KafkaError("Temporary failure"),
             KafkaError("Temporary failure"),
-            MagicMock(get=MagicMock(return_value=MagicMock(offset=123)))
+            MagicMock(get=MagicMock(return_value=MagicMock(offset=123))),
         ]
 
-        with patch('src.producers.kafka_producer.KafkaProducer', return_value=mock_kafka_producer):
+        with patch(
+            "src.producers.kafka_producer.KafkaProducer",
+            return_value=mock_kafka_producer,
+        ):
             producer = ResilientKafkaProducer()
             producer._producer = mock_kafka_producer
             producer._connected = True
 
             # Send with retry (depends on producer implementation)
-            result = producer.send({"test": "data"}, topic='user_data')
+            producer.send({"test": "data"}, topic="user_data")
 
             # Verify at least one attempt was made
             assert mock_kafka_producer.send.call_count >= 1
 
     def test_producer_context_manager(self, mock_kafka_producer):
         """Test context manager closes properly."""
-        with patch('src.producers.kafka_producer.KafkaProducer', return_value=mock_kafka_producer):
+        with patch(
+            "src.producers.kafka_producer.KafkaProducer",
+            return_value=mock_kafka_producer,
+        ):
             with ResilientKafkaProducer() as producer:
                 producer._producer = mock_kafka_producer
                 producer._connected = True
-                producer.send({"test": "data"}, topic='test_topic')
+                producer.send({"test": "data"}, topic="test_topic")
 
             # Should call flush on close
             mock_kafka_producer.flush.assert_called()
 
     def test_stats_tracking(self, mock_kafka_producer, sample_transformed_user):
         """Test stats tracking."""
-        with patch('src.producers.kafka_producer.KafkaProducer', return_value=mock_kafka_producer):
+        with patch(
+            "src.producers.kafka_producer.KafkaProducer",
+            return_value=mock_kafka_producer,
+        ):
             producer = ResilientKafkaProducer()
             producer._producer = mock_kafka_producer
             producer._connected = True
 
             # Send a few messages
             for _ in range(5):
-                producer.send(sample_transformed_user, topic='user_data')
+                producer.send(sample_transformed_user, topic="user_data")
 
             stats = producer.stats
 
-            assert 'sent' in stats
-            assert stats['sent'] >= 5
+            assert "sent" in stats
+            assert stats["sent"] >= 5
 
 
 class TestKafkaProducerWithAPIClient:
@@ -141,7 +149,7 @@ class TestKafkaProducerWithAPIClient:
     @pytest.fixture
     def mock_requests(self, mock_api_response):
         """Mock requests.Session."""
-        with patch('src.producers.api_client.requests.Session') as mock_session_class:
+        with patch("src.producers.api_client.requests.Session") as mock_session_class:
             mock_session = MagicMock()
             mock_response = MagicMock()
             mock_response.json.return_value = mock_api_response
@@ -152,35 +160,36 @@ class TestKafkaProducerWithAPIClient:
             yield mock_session
 
     def test_fetch_and_publish_flow(
-        self,
-        mock_requests,
-        mock_kafka_producer,
-        mock_api_response
+        self, mock_requests, mock_kafka_producer, mock_api_response
     ):
         """Test the full fetch -> transform -> publish flow."""
-        with patch('src.producers.kafka_producer.KafkaProducer', return_value=mock_kafka_producer):
+        with patch(
+            "src.producers.kafka_producer.KafkaProducer",
+            return_value=mock_kafka_producer,
+        ):
             # 1. Fetch from API
             api_client = RandomUserAPIClient()
             api_client._session = mock_requests
             data = api_client.get_random_user()
 
-            assert 'results' in data
-            assert len(data['results']) == 1
-            assert data['results'][0]['name']['first'] == 'John'
+            assert "results" in data
+            assert len(data["results"]) == 1
+            assert data["results"][0]["name"]["first"] == "John"
 
             # 2. Transform
             from src.transformers.user_transformer import UserTransformer
-            transformer = UserTransformer()
-            transformed = transformer.transform(data['results'][0])
 
-            assert transformed['first_name'] == 'John'
-            assert transformed['email'] == 'john.doe@example.com'
+            transformer = UserTransformer()
+            transformed = transformer.transform(data["results"][0])
+
+            assert transformed["first_name"] == "John"
+            assert transformed["email"] == "john.doe@example.com"
 
             # 3. Publish to Kafka
             producer = ResilientKafkaProducer()
             producer._producer = mock_kafka_producer
             producer._connected = True
-            result = producer.send(transformed, topic='user_data')
+            result = producer.send(transformed, topic="user_data")
 
             assert result is True
             mock_kafka_producer.send.assert_called()
@@ -192,7 +201,7 @@ class TestDLQBehavior:
     @pytest.fixture
     def mock_kafka_producer(self):
         """Mock KafkaProducer for DLQ tests."""
-        with patch('src.producers.kafka_producer.KafkaProducer') as mock_class:
+        with patch("src.producers.kafka_producer.KafkaProducer") as mock_class:
             mock_instance = MagicMock()
             mock_class.return_value = mock_instance
 
@@ -204,7 +213,10 @@ class TestDLQBehavior:
 
     def test_dlq_message_format(self, mock_kafka_producer):
         """Test DLQ message format is correct."""
-        with patch('src.producers.kafka_producer.KafkaProducer', return_value=mock_kafka_producer):
+        with patch(
+            "src.producers.kafka_producer.KafkaProducer",
+            return_value=mock_kafka_producer,
+        ):
             producer = ResilientKafkaProducer()
             producer._producer = mock_kafka_producer
             producer._connected = True
@@ -227,7 +239,10 @@ class TestDLQBehavior:
 
     def test_dlq_preserves_original_message(self, mock_kafka_producer):
         """Test DLQ preserves the original message."""
-        with patch('src.producers.kafka_producer.KafkaProducer', return_value=mock_kafka_producer):
+        with patch(
+            "src.producers.kafka_producer.KafkaProducer",
+            return_value=mock_kafka_producer,
+        ):
             producer = ResilientKafkaProducer()
             producer._producer = mock_kafka_producer
             producer._connected = True
@@ -248,21 +263,22 @@ class TestProducerErrorHandling:
     def test_connection_error_handling(self):
         """Test connection error handling."""
         from kafka.errors import NoBrokersAvailable
+
         from src.exceptions.custom_exceptions import KafkaConnectionError
 
-        with patch('src.producers.kafka_producer.KafkaProducer') as mock_class:
+        with patch("src.producers.kafka_producer.KafkaProducer") as mock_class:
             mock_class.side_effect = NoBrokersAvailable("No brokers")
 
             producer = ResilientKafkaProducer()
 
             # send() triggers connect(), which raises KafkaConnectionError
             with pytest.raises(KafkaConnectionError):
-                producer.send({"test": "data"}, topic='topic')
+                producer.send({"test": "data"}, topic="topic")
 
     @pytest.fixture
     def mock_kafka_producer(self):
         """Mock KafkaProducer for error handling tests."""
-        with patch('src.producers.kafka_producer.KafkaProducer') as mock_class:
+        with patch("src.producers.kafka_producer.KafkaProducer") as mock_class:
             mock_instance = MagicMock()
             mock_class.return_value = mock_instance
 
@@ -274,7 +290,10 @@ class TestProducerErrorHandling:
 
     def test_serialization_error_handling(self, mock_kafka_producer):
         """Test serialization error handling."""
-        with patch('src.producers.kafka_producer.KafkaProducer', return_value=mock_kafka_producer):
+        with patch(
+            "src.producers.kafka_producer.KafkaProducer",
+            return_value=mock_kafka_producer,
+        ):
             producer = ResilientKafkaProducer()
             producer._producer = mock_kafka_producer
             producer._connected = True
@@ -286,7 +305,7 @@ class TestProducerErrorHandling:
             data = {"obj": NonSerializable()}
 
             # Should handle the error gracefully
-            result = producer.send(data, topic='topic')
+            result = producer.send(data, topic="topic")
 
             # Depending on implementation, may return False or send to DLQ
             assert result is False or mock_kafka_producer.send.called
@@ -298,7 +317,7 @@ class TestProducerMetrics:
     @pytest.fixture
     def mock_kafka_producer(self):
         """Mock producer for metrics tests."""
-        with patch('src.producers.kafka_producer.KafkaProducer') as mock_class:
+        with patch("src.producers.kafka_producer.KafkaProducer") as mock_class:
             mock_instance = MagicMock()
             mock_class.return_value = mock_instance
 
@@ -309,35 +328,35 @@ class TestProducerMetrics:
             yield mock_instance
 
     def test_metrics_increment_on_success(
-        self,
-        mock_kafka_producer,
-        sample_transformed_user
+        self, mock_kafka_producer, sample_transformed_user
     ):
         """Test metrics increment on successful send."""
-        with patch('src.producers.kafka_producer.KafkaProducer', return_value=mock_kafka_producer):
+        with patch(
+            "src.producers.kafka_producer.KafkaProducer",
+            return_value=mock_kafka_producer,
+        ):
             producer = ResilientKafkaProducer()
             producer._producer = mock_kafka_producer
             producer._connected = True
-            producer.send(sample_transformed_user, topic='topic')
+            producer.send(sample_transformed_user, topic="topic")
 
             # Verify internal stats incremented
-            assert producer.stats['sent'] >= 1
+            assert producer.stats["sent"] >= 1
 
-    def test_latency_recorded(
-        self,
-        mock_kafka_producer,
-        sample_transformed_user
-    ):
+    def test_latency_recorded(self, mock_kafka_producer, sample_transformed_user):
         """Test latency is recorded."""
-        with patch('src.producers.kafka_producer.KafkaProducer', return_value=mock_kafka_producer):
+        with patch(
+            "src.producers.kafka_producer.KafkaProducer",
+            return_value=mock_kafka_producer,
+        ):
             producer = ResilientKafkaProducer()
             producer._producer = mock_kafka_producer
             producer._connected = True
 
-            producer.send(sample_transformed_user, topic='topic')
+            producer.send(sample_transformed_user, topic="topic")
 
             stats = producer.stats
 
             # Should have stats (specific fields depend on implementation)
             assert isinstance(stats, dict)
-            assert 'sent' in stats
+            assert "sent" in stats

@@ -2,7 +2,6 @@
 
 import sys
 import time
-import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -13,26 +12,26 @@ from airflow.operators.python import PythonOperator
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.config.settings import get_settings
-from src.utils.logging_config import setup_logging, get_logger
-from src.producers.api_client import RandomUserAPIClient
-from src.producers.kafka_producer import ResilientKafkaProducer
-from src.transformers.user_transformer import UserTransformer
-from src.config.schemas import validate_api_response
-from src.exceptions.custom_exceptions import (
+from src.config.schemas import validate_api_response  # noqa: E402
+from src.config.settings import get_settings  # noqa: E402
+from src.exceptions.custom_exceptions import (  # noqa: E402
     APIError,
+    DataValidationError,
     TransformationError,
-    DataValidationError
 )
+from src.producers.api_client import RandomUserAPIClient  # noqa: E402
+from src.producers.kafka_producer import ResilientKafkaProducer  # noqa: E402
+from src.transformers.user_transformer import UserTransformer  # noqa: E402
+from src.utils.logging_config import get_logger, setup_logging  # noqa: E402
 
 setup_logging()
 logger = get_logger(__name__)
 
 default_args = {
-    'owner': 'Tony',
-    'start_date': datetime(2025, 5, 20, 0, 0),
-    'retries': 1,
-    'retry_delay': 60,
+    "owner": "Tony",
+    "start_date": datetime(2025, 5, 20, 0, 0),
+    "retries": 1,
+    "retry_delay": 60,
 }
 
 
@@ -55,12 +54,11 @@ def stream_data():
         "Starting streaming task",
         extra={
             "duration_seconds": settings.streaming_duration_seconds,
-            "kafka_topic": settings.kafka.topic_user_data
-        }
+            "kafka_topic": settings.kafka.topic_user_data,
+        },
     )
 
-    with RandomUserAPIClient() as api_client, \
-         ResilientKafkaProducer() as producer:
+    with RandomUserAPIClient() as api_client, ResilientKafkaProducer() as producer:
 
         transformer = UserTransformer()
         start_time = time.time()
@@ -75,21 +73,20 @@ def stream_data():
                 is_valid, validated_data, errors = validate_api_response(api_response)
                 if not is_valid:
                     logger.warning(
-                        "API response validation failed",
-                        extra={"errors": errors}
+                        "API response validation failed", extra={"errors": errors}
                     )
                     # Send validation failures to DLQ
                     producer._send_to_dlq(
                         original_data=api_response,
                         source_topic=settings.kafka.topic_user_data,
                         error=DataValidationError(f"Validation failed: {errors}"),
-                        retry_count=0
+                        retry_count=0,
                     )
                     failure_count += 1
                     continue
 
                 # 3. Transform data
-                raw_user = api_response['results'][0]
+                raw_user = api_response["results"][0]
                 transformed = transformer.transform(raw_user)
 
                 # 4. Send to Kafka
@@ -100,9 +97,9 @@ def stream_data():
                     logger.debug(
                         "Message sent successfully",
                         extra={
-                            "user_id": transformed['id'],
-                            "username": transformed['username']
-                        }
+                            "user_id": transformed["id"],
+                            "username": transformed["username"],
+                        },
                     )
                 else:
                     failure_count += 1
@@ -111,26 +108,21 @@ def stream_data():
                 time.sleep(1)
 
             except APIError as e:
-                logger.error(
-                    f"API error: {e}",
-                    extra={"error_type": type(e).__name__}
-                )
+                logger.error(f"API error: {e}", extra={"error_type": type(e).__name__})
                 failure_count += 1
                 # API errors skip DLQ (no data to send)
                 continue
 
             except TransformationError as e:
                 logger.error(
-                    f"Transformation error: {e}",
-                    extra={"error_type": type(e).__name__}
+                    f"Transformation error: {e}", extra={"error_type": type(e).__name__}
                 )
                 failure_count += 1
                 continue
 
             except Exception as e:
                 logger.error(
-                    f"Unexpected error: {e}",
-                    extra={"error_type": type(e).__name__}
+                    f"Unexpected error: {e}", extra={"error_type": type(e).__name__}
                 )
                 failure_count += 1
                 continue
@@ -143,24 +135,27 @@ def stream_data():
             "duration_seconds": duration,
             "success_count": success_count,
             "failure_count": failure_count,
-            "success_rate": success_count / (success_count + failure_count) if (success_count + failure_count) > 0 else 0
-        }
+            "success_rate": (
+                success_count / (success_count + failure_count)
+                if (success_count + failure_count) > 0
+                else 0
+            ),
+        },
     )
-
 
 
 # DAG definition
 with DAG(
-    'user_auto_loading',
+    "user_auto_loading",
     default_args=default_args,
-    description='Stream random user data from API to Kafka',
-    schedule_interval='@daily',
+    description="Stream random user data from API to Kafka",
+    schedule_interval="@daily",
     catchup=False,
-    tags=['streaming', 'kafka', 'user_data']
+    tags=["streaming", "kafka", "user_data"],
 ) as dag:
 
     streaming_task = PythonOperator(
-        task_id='streaming_data_from_api',
+        task_id="streaming_data_from_api",
         python_callable=stream_data,
         doc_md="""
         ## Streaming Data Task
@@ -176,7 +171,7 @@ with DAG(
         - API errors: Logged and retried
         - Validation errors: Sent to DLQ
         - Kafka errors: Retried with exponential backoff, then DLQ
-        """
+        """,
     )
 
     # Additional tasks can be added here, e.g.:

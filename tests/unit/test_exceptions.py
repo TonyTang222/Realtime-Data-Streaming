@@ -3,31 +3,21 @@ Unit Tests for Custom Exceptions
 """
 
 import pytest
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.exceptions.custom_exceptions import (
-    # Base
-    StreamingPipelineError,
-    # API
-    APIError,
     APIConnectionError,
-    APITimeoutError,
+    APIError,
     APIRateLimitError,
-    # Kafka
-    KafkaError,
-    KafkaConnectionError,
-    # Cassandra
-    CassandraError,
+    APITimeoutError,
     CassandraConnectionError,
+    CassandraError,
     CassandraWriteError,
-    # Data
     DataValidationError,
+    KafkaConnectionError,
+    KafkaError,
+    StreamingPipelineError,
     TransformationError,
-    # Helper
-    is_retryable
+    is_retryable,
 )
 
 
@@ -51,8 +41,9 @@ class TestExceptionHierarchy:
         ]
 
         for exc_class in exceptions:
-            assert issubclass(exc_class, StreamingPipelineError), \
-                f"{exc_class.__name__} should inherit from StreamingPipelineError"
+            assert issubclass(
+                exc_class, StreamingPipelineError
+            ), f"{exc_class.__name__} should inherit from StreamingPipelineError"
 
     def test_api_exceptions_inherit_from_api_error(self):
         """Test API exceptions inherit from APIError."""
@@ -63,8 +54,9 @@ class TestExceptionHierarchy:
         ]
 
         for exc_class in api_exceptions:
-            assert issubclass(exc_class, APIError), \
-                f"{exc_class.__name__} should inherit from APIError"
+            assert issubclass(
+                exc_class, APIError
+            ), f"{exc_class.__name__} should inherit from APIError"
 
     def test_kafka_exceptions_inherit_from_kafka_error(self):
         """Test Kafka exceptions inherit from KafkaError."""
@@ -73,8 +65,9 @@ class TestExceptionHierarchy:
         ]
 
         for exc_class in kafka_exceptions:
-            assert issubclass(exc_class, KafkaError), \
-                f"{exc_class.__name__} should inherit from KafkaError"
+            assert issubclass(
+                exc_class, KafkaError
+            ), f"{exc_class.__name__} should inherit from KafkaError"
 
     def test_cassandra_exceptions_inherit_from_cassandra_error(self):
         """Test Cassandra exceptions inherit from CassandraError."""
@@ -84,8 +77,9 @@ class TestExceptionHierarchy:
         ]
 
         for exc_class in cassandra_exceptions:
-            assert issubclass(exc_class, CassandraError), \
-                f"{exc_class.__name__} should inherit from CassandraError"
+            assert issubclass(
+                exc_class, CassandraError
+            ), f"{exc_class.__name__} should inherit from CassandraError"
 
     def test_data_exceptions_inherit_correctly(self):
         """Test data validation exceptions inherit correctly."""
@@ -112,7 +106,9 @@ class TestAPIExceptions:
 
     def test_api_error_with_response_body(self):
         """Test APIError with response body."""
-        error = APIError("Error", status_code=500, response_body='{"error": "internal"}')
+        error = APIError(
+            "Error", status_code=500, response_body='{"error": "internal"}'
+        )
         assert error.response_body == '{"error": "internal"}'
 
     def test_api_rate_limit_error_with_retry_after(self):
@@ -140,9 +136,7 @@ class TestCassandraExceptions:
     def test_cassandra_write_error_with_metadata(self):
         """Test CassandraWriteError with metadata."""
         error = CassandraWriteError(
-            "Write failed",
-            keyspace="spark_streams",
-            table="created_users"
+            "Write failed", keyspace="spark_streams", table="created_users"
         )
         assert error.keyspace == "spark_streams"
         assert error.table == "created_users"
@@ -162,10 +156,7 @@ class TestDataValidationExceptions:
     def test_data_validation_error_with_field_info(self):
         """Test DataValidationError with field info."""
         error = DataValidationError(
-            "Invalid email",
-            field="email",
-            value="not-an-email",
-            expected_type="email"
+            "Invalid email", field="email", value="not-an-email", expected_type="email"
         )
 
         assert error.field == "email"
@@ -205,8 +196,9 @@ class TestIsRetryable:
         ]
 
         for error in retryable_errors:
-            assert is_retryable(error) is True, \
-                f"{type(error).__name__} should be retryable"
+            assert (
+                is_retryable(error) is True
+            ), f"{type(error).__name__} should be retryable"
 
     def test_non_retryable_exceptions(self):
         """Test exceptions that should not be retryable."""
@@ -218,8 +210,9 @@ class TestIsRetryable:
         ]
 
         for error in non_retryable_errors:
-            assert is_retryable(error) is False, \
-                f"{type(error).__name__} should not be retryable"
+            assert (
+                is_retryable(error) is False
+            ), f"{type(error).__name__} should not be retryable"
 
     def test_standard_exceptions_not_retryable(self):
         """Test standard exceptions are not retryable."""

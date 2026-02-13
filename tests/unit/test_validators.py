@@ -2,16 +2,10 @@
 Unit Tests for Validators
 """
 
-import pytest
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 from src.utils.validators import (
     safe_get_nested,
-    sanitize_string,
     sanitize_email,
+    sanitize_string,
     validate_required_fields,
 )
 
@@ -137,5 +131,3 @@ class TestValidateRequiredFields:
         data = {"name": "John", "email": "   "}
         missing = validate_required_fields(data, ["name", "email"])
         assert "email" in missing
-
-

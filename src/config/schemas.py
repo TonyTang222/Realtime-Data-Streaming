@@ -1,13 +1,15 @@
 """Data Schemas and Validation"""
 
 import re
-from typing import Optional, List, Tuple, Any, Dict
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+
 from pydantic import BaseModel, Field, validator
 
 # PySpark imports are optional (not available in Airflow container)
 try:
-    from pyspark.sql.types import StructType, StructField, StringType
+    from pyspark.sql.types import StringType, StructField, StructType
+
     PYSPARK_AVAILABLE = True
 except ImportError:
     PYSPARK_AVAILABLE = False
@@ -20,21 +22,24 @@ except ImportError:
 # Pydantic Models for API Response Validation
 # ============================================================
 
+
 class StreetInfo(BaseModel):
     """Street information."""
+
     number: int
     name: str
 
 
 class LocationInfo(BaseModel):
     """Location information."""
+
     street: StreetInfo
     city: str
     state: str
     country: str
     postcode: str
 
-    @validator('postcode', pre=True)
+    @validator("postcode", pre=True)
     @classmethod
     def convert_postcode_to_string(cls, v):
         """Ensure postcode is string."""
@@ -43,33 +48,39 @@ class LocationInfo(BaseModel):
 
 class NameInfo(BaseModel):
     """Name information."""
+
     first: str
     last: str
 
 
 class LoginInfo(BaseModel):
     """Login information."""
+
     username: str
 
 
 class DOBInfo(BaseModel):
     """Date of birth information."""
+
     date: str
     age: int
 
 
 class RegisteredInfo(BaseModel):
     """Registration information."""
+
     date: str
 
 
 class PictureInfo(BaseModel):
     """Profile picture information."""
+
     medium: str
 
 
 class UserAPIResponse(BaseModel):
     """Validates user data from the randomuser.me API response."""
+
     gender: str
     name: NameInfo
     location: LocationInfo
@@ -80,22 +91,22 @@ class UserAPIResponse(BaseModel):
     phone: str
     picture: PictureInfo
 
-    @validator('gender')
+    @validator("gender")
     @classmethod
     def validate_gender(cls, v: str) -> str:
         """Validate gender value."""
-        allowed_values = {'male', 'female', 'other'}
+        allowed_values = {"male", "female", "other"}
         if v.lower() not in allowed_values:
-            return 'other'
+            return "other"
         return v.lower()
 
-    @validator('email')
+    @validator("email")
     @classmethod
     def validate_email_format(cls, v: str) -> str:
         """Validate email format."""
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         if not re.match(email_pattern, v):
-            raise ValueError(f'Invalid email format: {v}')
+            raise ValueError(f"Invalid email format: {v}")
         return v.lower()
 
 
@@ -103,8 +114,10 @@ class UserAPIResponse(BaseModel):
 # Pydantic Model for Transformed Data
 # ============================================================
 
+
 class TransformedUser(BaseModel):
     """Transformed user data schema for Kafka and Cassandra."""
+
     id: str = Field(..., min_length=36, max_length=36, description="UUID")
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
@@ -117,35 +130,35 @@ class TransformedUser(BaseModel):
     phone: str = Field(..., max_length=50)
     picture: str = Field(..., description="URL to profile picture")
 
-    @validator('gender')
+    @validator("gender")
     @classmethod
     def validate_gender(cls, v: str) -> str:
         """Validate gender value."""
-        if v not in ('male', 'female', 'other'):
-            raise ValueError(f'Invalid gender: {v}. Must be male, female, or other')
+        if v not in ("male", "female", "other"):
+            raise ValueError(f"Invalid gender: {v}. Must be male, female, or other")
         return v
 
-    @validator('email')
+    @validator("email")
     @classmethod
     def validate_email(cls, v: str) -> str:
         """Validate email format."""
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         if not re.match(email_pattern, v):
-            raise ValueError(f'Invalid email format: {v}')
+            raise ValueError(f"Invalid email format: {v}")
         return v.lower()
 
-    @validator('id')
+    @validator("id")
     @classmethod
     def validate_uuid_format(cls, v: str) -> str:
         """Validate UUID format."""
-        uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        uuid_pattern = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
         if not re.match(uuid_pattern, v.lower()):
-            raise ValueError(f'Invalid UUID format: {v}')
+            raise ValueError(f"Invalid UUID format: {v}")
         return v
 
     class Config:
         # Strict mode: reject undefined fields
-        extra = 'forbid'
+        extra = "forbid"
 
 
 # ============================================================
@@ -155,19 +168,21 @@ class TransformedUser(BaseModel):
 # This schema must match TransformedUser fields
 
 if PYSPARK_AVAILABLE:
-    SPARK_USER_SCHEMA = StructType([
-        StructField("id", StringType(), False),
-        StructField("first_name", StringType(), False),
-        StructField("last_name", StringType(), False),
-        StructField("gender", StringType(), False),
-        StructField("address", StringType(), False),
-        StructField("email", StringType(), False),
-        StructField("username", StringType(), False),
-        StructField("dob", StringType(), True),               # optional
-        StructField("registered_date", StringType(), False),
-        StructField("phone", StringType(), False),
-        StructField("picture", StringType(), False)
-    ])
+    SPARK_USER_SCHEMA = StructType(
+        [
+            StructField("id", StringType(), False),
+            StructField("first_name", StringType(), False),
+            StructField("last_name", StringType(), False),
+            StructField("gender", StringType(), False),
+            StructField("address", StringType(), False),
+            StructField("email", StringType(), False),
+            StructField("username", StringType(), False),
+            StructField("dob", StringType(), True),  # optional
+            StructField("registered_date", StringType(), False),
+            StructField("phone", StringType(), False),
+            StructField("picture", StringType(), False),
+        ]
+    )
 else:
     SPARK_USER_SCHEMA = None
 
@@ -202,8 +217,10 @@ CREATE TABLE IF NOT EXISTS {keyspace}.{table} (
 # Dead Letter Queue Schema
 # ============================================================
 
+
 class DLQMessage(BaseModel):
     """Dead Letter Queue message format for failed message handling."""
+
     original_message: str = Field(..., description="Original message as JSON string")
     error_type: str = Field(..., description="Exception class name")
     error_message: str = Field(..., description="Error message")
@@ -217,17 +234,18 @@ class DLQMessage(BaseModel):
         original_message: Any,
         error: Exception,
         source_topic: str,
-        retry_count: int = 0
+        retry_count: int = 0,
     ) -> "DLQMessage":
         """Create a DLQ message from an error."""
         import json
+
         return cls(
             original_message=json.dumps(original_message, default=str),
             error_type=type(error).__name__,
             error_message=str(error),
             timestamp=datetime.utcnow().isoformat() + "Z",
             retry_count=retry_count,
-            source_topic=source_topic
+            source_topic=source_topic,
         )
 
 
@@ -235,7 +253,10 @@ class DLQMessage(BaseModel):
 # Validation Helper Functions
 # ============================================================
 
-def validate_api_response(response: Dict[str, Any]) -> Tuple[bool, Optional[UserAPIResponse], List[str]]:
+
+def validate_api_response(
+    response: Dict[str, Any]
+) -> Tuple[bool, Optional[UserAPIResponse], List[str]]:
     """Validate API response. Returns (is_valid, validated_data, errors)."""
     errors = []
 
@@ -243,39 +264,45 @@ def validate_api_response(response: Dict[str, Any]) -> Tuple[bool, Optional[User
     if not isinstance(response, dict):
         return False, None, ["Response is not a dictionary"]
 
-    if 'results' not in response:
+    if "results" not in response:
         return False, None, ["Missing 'results' key in response"]
 
-    if not response['results'] or len(response['results']) == 0:
+    if not response["results"] or len(response["results"]) == 0:
         return False, None, ["Empty results array"]
 
     # Validate with Pydantic
-    user_data = response['results'][0]
+    user_data = response["results"][0]
     try:
         validated = UserAPIResponse.parse_obj(user_data)
         return True, validated, []
     except Exception as e:
         # Parse Pydantic error details
-        if hasattr(e, 'errors'):
+        if hasattr(e, "errors"):
             for error in e.errors():
-                field_path = '.'.join(str(x) for x in error.get('loc', []))
-                errors.append(f"Field '{field_path}': {error.get('msg', 'unknown error')}")
+                field_path = ".".join(str(x) for x in error.get("loc", []))
+                errors.append(
+                    f"Field '{field_path}': {error.get('msg', 'unknown error')}"
+                )
         else:
             errors.append(str(e))
         return False, None, errors
 
 
-def validate_transformed_data(data: Dict[str, Any]) -> Tuple[bool, Optional[TransformedUser], List[str]]:
+def validate_transformed_data(
+    data: Dict[str, Any]
+) -> Tuple[bool, Optional[TransformedUser], List[str]]:
     """Validate transformed data. Returns (is_valid, validated_data, errors)."""
     errors = []
     try:
         validated = TransformedUser.parse_obj(data)
         return True, validated, []
     except Exception as e:
-        if hasattr(e, 'errors'):
+        if hasattr(e, "errors"):
             for error in e.errors():
-                field_path = '.'.join(str(x) for x in error.get('loc', []))
-                errors.append(f"Field '{field_path}': {error.get('msg', 'unknown error')}")
+                field_path = ".".join(str(x) for x in error.get("loc", []))
+                errors.append(
+                    f"Field '{field_path}': {error.get('msg', 'unknown error')}"
+                )
         else:
             errors.append(str(e))
         return False, None, errors

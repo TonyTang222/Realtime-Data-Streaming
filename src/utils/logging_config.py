@@ -1,10 +1,10 @@
 """Structured Logging Configuration"""
 
+import json
 import logging
 import sys
-import json
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 
 class JSONFormatter(logging.Formatter):
@@ -48,16 +48,35 @@ class JSONFormatter(logging.Formatter):
         # Collect extra fields passed via logger.info("msg", extra={...})
         # Exclude built-in LogRecord attributes
         builtin_attrs = {
-            'name', 'msg', 'args', 'created', 'filename', 'funcName',
-            'levelname', 'levelno', 'lineno', 'module', 'msecs',
-            'pathname', 'process', 'processName', 'relativeCreated',
-            'stack_info', 'exc_info', 'exc_text', 'thread', 'threadName',
-            'message', 'asctime', 'taskName'
+            "name",
+            "msg",
+            "args",
+            "created",
+            "filename",
+            "funcName",
+            "levelname",
+            "levelno",
+            "lineno",
+            "module",
+            "msecs",
+            "pathname",
+            "process",
+            "processName",
+            "relativeCreated",
+            "stack_info",
+            "exc_info",
+            "exc_text",
+            "thread",
+            "threadName",
+            "message",
+            "asctime",
+            "taskName",
         }
 
         extras = {
-            k: v for k, v in record.__dict__.items()
-            if k not in builtin_attrs and not k.startswith('_')
+            k: v
+            for k, v in record.__dict__.items()
+            if k not in builtin_attrs and not k.startswith("_")
         }
         if extras:
             log_data["extra"] = extras
@@ -71,8 +90,7 @@ class JSONFormatter(logging.Formatter):
 
 
 def setup_logging(
-    level: Optional[str] = None,
-    log_file: Optional[str] = None
+    level: Optional[str] = None, log_file: Optional[str] = None
 ) -> logging.Logger:
     """
     Configure structured JSON logging.
@@ -83,6 +101,7 @@ def setup_logging(
     """
     # Load defaults from settings (deferred import to avoid circular dependency)
     from src.config.settings import get_settings
+
     settings = get_settings()
 
     log_level = level or settings.logging.level
@@ -109,10 +128,10 @@ def setup_logging(
         root_logger.addHandler(file_handler)
 
     # Reduce noise from third-party libraries
-    logging.getLogger('kafka').setLevel(logging.WARNING)
-    logging.getLogger('cassandra').setLevel(logging.WARNING)
-    logging.getLogger('urllib3').setLevel(logging.WARNING)
-    logging.getLogger('requests').setLevel(logging.WARNING)
+    logging.getLogger("kafka").setLevel(logging.WARNING)
+    logging.getLogger("cassandra").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("requests").setLevel(logging.WARNING)
 
     return root_logger
 

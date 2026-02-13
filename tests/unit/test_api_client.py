@@ -2,21 +2,18 @@
 Unit Tests for Random User API Client
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-import sys
-from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
 import requests
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from src.producers.api_client import RandomUserAPIClient
 from src.exceptions.custom_exceptions import (
-    APIError,
     APIConnectionError,
+    APIError,
+    APIRateLimitError,
     APITimeoutError,
-    APIRateLimitError
 )
+from src.producers.api_client import RandomUserAPIClient
 
 
 class TestRandomUserAPIClient:
@@ -25,7 +22,7 @@ class TestRandomUserAPIClient:
     @pytest.fixture
     def mock_session(self):
         """Mock requests.Session."""
-        with patch('src.producers.api_client.requests.Session') as mock_session_class:
+        with patch("src.producers.api_client.requests.Session") as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value = mock_session
             yield mock_session
@@ -33,7 +30,7 @@ class TestRandomUserAPIClient:
     @pytest.fixture
     def client(self):
         """Create an API client instance."""
-        with patch('src.producers.api_client.get_settings') as mock_settings:
+        with patch("src.producers.api_client.get_settings") as mock_settings:
             mock_config = MagicMock()
             mock_config.api.base_url = "https://randomuser.me/api/"
             mock_config.api.timeout_seconds = 30
@@ -55,11 +52,13 @@ class TestRandomUserAPIClient:
         result = client.get_random_user()
 
         assert result == sample_api_response
-        assert 'results' in result
-        assert len(result['results']) == 1
+        assert "results" in result
+        assert len(result["results"]) == 1
         mock_session.get.assert_called_once()
 
-    def test_stats_increment_on_success(self, client, mock_session, sample_api_response):
+    def test_stats_increment_on_success(
+        self, client, mock_session, sample_api_response
+    ):
         """Test stats increment on success."""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -67,19 +66,19 @@ class TestRandomUserAPIClient:
         mock_session.get.return_value = mock_response
 
         client._session = mock_session
-        initial_requests = client.stats['requests']
-        initial_successes = client.stats['successes']
+        initial_requests = client.stats["requests"]
+        initial_successes = client.stats["successes"]
 
         client.get_random_user()
 
-        assert client.stats['requests'] == initial_requests + 1
-        assert client.stats['successes'] == initial_successes + 1
+        assert client.stats["requests"] == initial_requests + 1
+        assert client.stats["successes"] == initial_successes + 1
 
     def test_session_lazy_initialization(self, client):
         """Test session lazy initialization."""
         assert client._session is None
 
-        with patch('src.producers.api_client.requests.Session') as mock_class:
+        with patch("src.producers.api_client.requests.Session") as mock_class:
             mock_class.return_value = MagicMock()
             session = client._get_session()
             assert session is not None
@@ -87,7 +86,7 @@ class TestRandomUserAPIClient:
 
     def test_session_reused(self, client):
         """Test session is reused across calls."""
-        with patch('src.producers.api_client.requests.Session') as mock_class:
+        with patch("src.producers.api_client.requests.Session") as mock_class:
             mock_instance = MagicMock()
             mock_class.return_value = mock_instance
 
@@ -109,7 +108,7 @@ class TestRandomUserAPIClient:
         with pytest.raises(APIConnectionError):
             client.get_random_user()
 
-        assert client.stats['retries'] >= 1
+        assert client.stats["retries"] >= 1
 
     def test_timeout_error_raises_api_timeout_error(self, client, mock_session):
         """Test timeout raises APITimeoutError."""
@@ -119,13 +118,13 @@ class TestRandomUserAPIClient:
         with pytest.raises(APITimeoutError):
             client.get_random_user()
 
-        assert client.stats['retries'] >= 1
+        assert client.stats["retries"] >= 1
 
     def test_rate_limit_raises_api_rate_limit_error(self, client, mock_session):
         """Test 429 status code raises APIRateLimitError."""
         mock_response = MagicMock()
         mock_response.status_code = 429
-        mock_response.headers = {'Retry-After': '60'}
+        mock_response.headers = {"Retry-After": "60"}
         mock_session.get.return_value = mock_response
         client._session = mock_session
 
@@ -133,7 +132,7 @@ class TestRandomUserAPIClient:
             client.get_random_user()
 
         assert exc_info.value.retry_after == 60
-        assert client.stats['failures'] >= 1
+        assert client.stats["failures"] >= 1
 
     def test_server_error_raises_api_connection_error(self, client, mock_session):
         """Test 5xx status code raises APIConnectionError (retryable)."""
@@ -158,7 +157,7 @@ class TestRandomUserAPIClient:
             client.get_random_user()
 
         assert exc_info.value.status_code == 400
-        assert client.stats['failures'] >= 1
+        assert client.stats["failures"] >= 1
 
     def test_invalid_json_raises_api_error(self, client, mock_session):
         """Test invalid JSON raises APIError."""
@@ -178,13 +177,15 @@ class TestRandomUserAPIClient:
 
     def test_context_manager_closes_session(self):
         """Test context manager properly closes session."""
-        with patch('src.producers.api_client.get_settings') as mock_settings:
+        with patch("src.producers.api_client.get_settings") as mock_settings:
             mock_config = MagicMock()
             mock_config.api.base_url = "https://randomuser.me/api/"
             mock_config.api.timeout_seconds = 30
             mock_settings.return_value = mock_config
 
-            with patch('src.producers.api_client.requests.Session') as mock_session_class:
+            with patch(
+                "src.producers.api_client.requests.Session"
+            ) as mock_session_class:
                 mock_session = MagicMock()
                 mock_session_class.return_value = mock_session
 
@@ -195,7 +196,7 @@ class TestRandomUserAPIClient:
 
     def test_close_clears_session(self, client):
         """Test close() clears the session."""
-        with patch('src.producers.api_client.requests.Session') as mock_class:
+        with patch("src.producers.api_client.requests.Session") as mock_class:
             mock_session = MagicMock()
             mock_class.return_value = mock_session
 
@@ -220,18 +221,20 @@ class TestAPIClientRetryBehavior:
     @pytest.fixture
     def client_with_mock_settings(self):
         """Create a client with mock settings."""
-        with patch('src.producers.api_client.get_settings') as mock_settings:
+        with patch("src.producers.api_client.get_settings") as mock_settings:
             mock_config = MagicMock()
             mock_config.api.base_url = "https://randomuser.me/api/"
             mock_config.api.timeout_seconds = 30
             mock_settings.return_value = mock_config
             yield RandomUserAPIClient()
 
-    def test_retry_on_connection_error(self, client_with_mock_settings, sample_api_response):
+    def test_retry_on_connection_error(
+        self, client_with_mock_settings, sample_api_response
+    ):
         """Test retries on connection error."""
         client = client_with_mock_settings
 
-        with patch('src.producers.api_client.requests.Session') as mock_session_class:
+        with patch("src.producers.api_client.requests.Session") as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value = mock_session
 
@@ -243,7 +246,7 @@ class TestAPIClientRetryBehavior:
             mock_session.get.side_effect = [
                 requests.ConnectionError("First failure"),
                 requests.ConnectionError("Second failure"),
-                mock_response
+                mock_response,
             ]
 
             client._session = mock_session
@@ -256,11 +259,13 @@ class TestAPIClientRetryBehavior:
         """Test error raised after retries exhausted."""
         client = client_with_mock_settings
 
-        with patch('src.producers.api_client.requests.Session') as mock_session_class:
+        with patch("src.producers.api_client.requests.Session") as mock_session_class:
             mock_session = MagicMock()
             mock_session_class.return_value = mock_session
 
-            mock_session.get.side_effect = requests.ConnectionError("Persistent failure")
+            mock_session.get.side_effect = requests.ConnectionError(
+                "Persistent failure"
+            )
             client._session = mock_session
 
             with pytest.raises(APIConnectionError):
@@ -275,13 +280,15 @@ class TestAPIClientHeaders:
 
     def test_session_has_correct_headers(self):
         """Test session has correct headers configured."""
-        with patch('src.producers.api_client.get_settings') as mock_settings:
+        with patch("src.producers.api_client.get_settings") as mock_settings:
             mock_config = MagicMock()
             mock_config.api.base_url = "https://randomuser.me/api/"
             mock_config.api.timeout_seconds = 30
             mock_settings.return_value = mock_config
 
-            with patch('src.producers.api_client.requests.Session') as mock_session_class:
+            with patch(
+                "src.producers.api_client.requests.Session"
+            ) as mock_session_class:
                 mock_session = MagicMock()
                 mock_session.headers = MagicMock()  # Use MagicMock for headers
                 mock_session_class.return_value = mock_session
@@ -292,5 +299,5 @@ class TestAPIClientHeaders:
                 # Verify headers.update was called
                 mock_session.headers.update.assert_called()
                 call_args = mock_session.headers.update.call_args[0][0]
-                assert 'Accept' in call_args
-                assert call_args['Accept'] == 'application/json'
+                assert "Accept" in call_args
+                assert call_args["Accept"] == "application/json"

@@ -2,7 +2,7 @@
 Custom Exception Hierarchy for the Streaming Pipeline
 """
 
-from typing import Optional, Any
+from typing import Any, Optional
 
 
 class StreamingPipelineError(Exception):
@@ -20,6 +20,7 @@ class StreamingPipelineError(Exception):
 # API Exceptions
 # ============================================================
 
+
 class APIError(StreamingPipelineError):
     """Raised when external API calls fail."""
 
@@ -27,7 +28,7 @@ class APIError(StreamingPipelineError):
         self,
         message: str,
         status_code: Optional[int] = None,
-        response_body: Optional[str] = None
+        response_body: Optional[str] = None,
     ):
         super().__init__(message)
         self.status_code = status_code
@@ -42,11 +43,13 @@ class APIError(StreamingPipelineError):
 
 class APIConnectionError(APIError):
     """Raised when unable to connect to API."""
+
     pass
 
 
 class APITimeoutError(APIError):
     """Raised when API request times out."""
+
     pass
 
 
@@ -54,10 +57,7 @@ class APIRateLimitError(APIError):
     """Raised when API rate limit is exceeded (HTTP 429)."""
 
     def __init__(
-        self,
-        message: str,
-        retry_after: Optional[int] = None,
-        status_code: int = 429
+        self, message: str, retry_after: Optional[int] = None, status_code: int = 429
     ):
         super().__init__(message, status_code=status_code)
         self.retry_after = retry_after
@@ -67,13 +67,16 @@ class APIRateLimitError(APIError):
 # Kafka Exceptions
 # ============================================================
 
+
 class KafkaError(StreamingPipelineError):
     """Base exception for Kafka-related errors."""
+
     pass
 
 
 class KafkaConnectionError(KafkaError):
     """Raised when unable to connect to Kafka broker."""
+
     pass
 
 
@@ -81,13 +84,16 @@ class KafkaConnectionError(KafkaError):
 # Cassandra Exceptions
 # ============================================================
 
+
 class CassandraError(StreamingPipelineError):
     """Base exception for Cassandra-related errors."""
+
     pass
 
 
 class CassandraConnectionError(CassandraError):
     """Raised when unable to connect to Cassandra."""
+
     pass
 
 
@@ -95,10 +101,7 @@ class CassandraWriteError(CassandraError):
     """Raised when write to Cassandra fails."""
 
     def __init__(
-        self,
-        message: str,
-        keyspace: Optional[str] = None,
-        table: Optional[str] = None
+        self, message: str, keyspace: Optional[str] = None, table: Optional[str] = None
     ):
         super().__init__(message)
         self.keyspace = keyspace
@@ -109,6 +112,7 @@ class CassandraWriteError(CassandraError):
 # Data Validation Exceptions
 # ============================================================
 
+
 class DataValidationError(StreamingPipelineError):
     """Raised when data validation fails."""
 
@@ -117,7 +121,7 @@ class DataValidationError(StreamingPipelineError):
         message: str,
         field: Optional[str] = None,
         value: Optional[Any] = None,
-        expected_type: Optional[str] = None
+        expected_type: Optional[str] = None,
     ):
         super().__init__(message)
         self.field = field
@@ -137,11 +141,7 @@ class DataValidationError(StreamingPipelineError):
 class TransformationError(StreamingPipelineError):
     """Raised when data transformation fails."""
 
-    def __init__(
-        self,
-        message: str,
-        source_data: Optional[Any] = None
-    ):
+    def __init__(self, message: str, source_data: Optional[Any] = None):
         super().__init__(message)
         self.source_data = source_data
 
@@ -149,6 +149,7 @@ class TransformationError(StreamingPipelineError):
 # ============================================================
 # Helper Functions
 # ============================================================
+
 
 def is_retryable(error: Exception) -> bool:
     """

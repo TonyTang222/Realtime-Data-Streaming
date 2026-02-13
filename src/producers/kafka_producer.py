@@ -2,14 +2,13 @@
 
 import json
 import logging
-from typing import Dict, Any, Optional, Callable
-from datetime import datetime
+from typing import Any, Callable, Dict, Optional
 
 from kafka import KafkaProducer
-from kafka.errors import KafkaError, NoBrokersAvailable, KafkaTimeoutError
+from kafka.errors import KafkaError, KafkaTimeoutError, NoBrokersAvailable
 
-from src.config.settings import get_settings, KafkaConfig
 from src.config.schemas import DLQMessage
+from src.config.settings import KafkaConfig, get_settings
 from src.exceptions.custom_exceptions import KafkaConnectionError
 from src.utils.retry import exponential_backoff_retry
 
@@ -37,7 +36,7 @@ class ResilientKafkaProducer:
         self,
         config: Optional[KafkaConfig] = None,
         on_send_success: Optional[Callable[[Dict[str, Any], Any], None]] = None,
-        on_send_failure: Optional[Callable[[Dict[str, Any], Exception], None]] = None
+        on_send_failure: Optional[Callable[[Dict[str, Any], Exception], None]] = None,
     ):
         """Initialize producer.
 
@@ -53,11 +52,7 @@ class ResilientKafkaProducer:
         self._connected = False
 
         # Stats
-        self._stats = {
-            'sent': 0,
-            'failed': 0,
-            'sent_to_dlq': 0
-        }
+        self._stats = {"sent": 0, "failed": 0, "sent_to_dlq": 0}
 
     @property
     def is_connected(self) -> bool:
@@ -73,7 +68,7 @@ class ResilientKafkaProducer:
         max_retries=3,
         base_delay=2.0,
         max_delay=30.0,
-        retryable_exceptions=(NoBrokersAvailable, KafkaTimeoutError, ConnectionError)
+        retryable_exceptions=(NoBrokersAvailable, KafkaTimeoutError, ConnectionError),
     )
     def connect(self) -> "ResilientKafkaProducer":
         """Connect to Kafka with retry.
@@ -89,7 +84,7 @@ class ResilientKafkaProducer:
 
         try:
             # Parse bootstrap servers
-            servers = [s.strip() for s in self.config.bootstrap_servers.split(',')]
+            servers = [s.strip() for s in self.config.bootstrap_servers.split(",")]
 
             self._producer = KafkaProducer(
                 bootstrap_servers=servers,
@@ -97,20 +92,18 @@ class ResilientKafkaProducer:
                 acks=self.config.acks,
                 retries=self.config.retries,
                 max_block_ms=self.config.max_block_ms,
-
                 # Performance settings
                 batch_size=self.config.batch_size,
                 linger_ms=self.config.linger_ms,
-
                 # Serialization
-                value_serializer=lambda v: json.dumps(v, default=str).encode('utf-8'),
-                key_serializer=lambda k: k.encode('utf-8') if k else None,
+                value_serializer=lambda v: json.dumps(v, default=str).encode("utf-8"),
+                key_serializer=lambda k: k.encode("utf-8") if k else None,
             )
 
             self._connected = True
             logger.info(
                 "Kafka producer connected successfully",
-                extra={"bootstrap_servers": servers}
+                extra={"bootstrap_servers": servers},
             )
             return self
 
@@ -123,7 +116,7 @@ class ResilientKafkaProducer:
         data: Dict[str, Any],
         topic: Optional[str] = None,
         key: Optional[str] = None,
-        sync: bool = True
+        sync: bool = True,
     ) -> bool:
         """Send a message to Kafka.
 
@@ -155,11 +148,11 @@ class ResilientKafkaProducer:
                         extra={
                             "topic": record_metadata.topic,
                             "partition": record_metadata.partition,
-                            "offset": record_metadata.offset
-                        }
+                            "offset": record_metadata.offset,
+                        },
                     )
 
-                self._stats['sent'] += 1
+                self._stats["sent"] += 1
 
                 if self.on_send_success:
                     self.on_send_success(data, record_metadata if sync else None)
@@ -173,12 +166,12 @@ class ResilientKafkaProducer:
                     extra={
                         "topic": topic,
                         "attempt": retry_count,
-                        "error_type": type(e).__name__
-                    }
+                        "error_type": type(e).__name__,
+                    },
                 )
 
                 if retry_count >= max_retries:
-                    self._stats['failed'] += 1
+                    self._stats["failed"] += 1
                     self._send_to_dlq(data, topic, e, retry_count)
 
                     if self.on_send_failure:
@@ -193,7 +186,7 @@ class ResilientKafkaProducer:
         original_data: Dict[str, Any],
         source_topic: str,
         error: Exception,
-        retry_count: int
+        retry_count: int,
     ) -> bool:
         """Send a failed message to the Dead Letter Queue."""
         try:
@@ -201,34 +194,30 @@ class ResilientKafkaProducer:
                 original_message=original_data,
                 error=error,
                 source_topic=source_topic,
-                retry_count=retry_count
+                retry_count=retry_count,
             )
 
             future = self._producer.send(
-                self.config.topic_dlq,
-                value=dlq_message.dict()
+                self.config.topic_dlq, value=dlq_message.dict()
             )
             future.get(timeout=10)
 
-            self._stats['sent_to_dlq'] += 1
+            self._stats["sent_to_dlq"] += 1
 
             logger.info(
                 "Message sent to DLQ",
                 extra={
                     "dlq_topic": self.config.topic_dlq,
                     "source_topic": source_topic,
-                    "error_type": type(error).__name__
-                }
+                    "error_type": type(error).__name__,
+                },
             )
             return True
 
         except Exception as dlq_error:
             logger.error(
                 f"Failed to send message to DLQ: {dlq_error}",
-                extra={
-                    "original_error": str(error),
-                    "dlq_error": str(dlq_error)
-                }
+                extra={"original_error": str(error), "dlq_error": str(dlq_error)},
             )
             return False
 
@@ -245,10 +234,7 @@ class ResilientKafkaProducer:
             self._producer.close()
             self._producer = None
             self._connected = False
-            logger.info(
-                "Kafka producer closed",
-                extra={"stats": self._stats}
-            )
+            logger.info("Kafka producer closed", extra={"stats": self._stats})
 
     def __enter__(self) -> "ResilientKafkaProducer":
         """Enter context manager."""

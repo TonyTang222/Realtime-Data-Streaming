@@ -1,7 +1,7 @@
 """Consumers Module"""
 
-from .spark_consumer import SparkStreamingConsumer
 from .dlq_consumer import DLQConsumer
+from .spark_consumer import SparkStreamingConsumer
 
 __all__ = [
     "SparkStreamingConsumer",
