@@ -11,13 +11,12 @@ version: '3'
 # Startup order (controlled by depends_on):
 #   1. Zookeeper (Kafka dependency)
 #   2. Broker (Kafka)
-#   3. Schema Registry
-#   4. Control Center
-#   5. Postgres (Airflow dependency)
-#   6. Airflow Webserver/Scheduler
-#   7. Cassandra
-#   8. Spark Master/Worker
-#   9. Spark App
+#   3. Control Center
+#   4. Postgres (Airflow dependency)
+#   5. Airflow Webserver/Scheduler
+#   6. Cassandra
+#   7. Spark Master/Worker
+#   8. Spark App
 # ============================================================
 
 services:
@@ -63,7 +62,6 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_JMX_PORT: 9101
       KAFKA_JMX_HOSTNAME: localhost
-      KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: broker:29092
       CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
       CONFLUENT_METRICS_ENABLE: 'false'
@@ -88,54 +86,23 @@ services:
     depends_on:
       broker:
         condition: service_healthy
-    entrypoint: [ '/bin/bash', '-c' ]
-    command: |
-      "
-      echo 'Waiting for Kafka to be ready...'
-      cub kafka-ready -b broker:29092 1 60
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        echo 'Waiting for Kafka to be ready...'
+        cub kafka-ready -b broker:29092 1 60
 
-      echo 'Creating topics...'
+        echo 'Creating topics...'
 
-      # Main topic for user data
-      kafka-topics --create --if-not-exists \
-        --bootstrap-server broker:29092 \
-        --topic user_data \
-        --partitions 3 \
-        --replication-factor 1
+        kafka-topics --create --if-not-exists --bootstrap-server broker:29092 --topic user_data --partitions 3 --replication-factor 1
 
-      # Dead Letter Queue for failed messages
-      kafka-topics --create --if-not-exists \
-        --bootstrap-server broker:29092 \
-        --topic user_data_dlq \
-        --partitions 1 \
-        --replication-factor 1
+        kafka-topics --create --if-not-exists --bootstrap-server broker:29092 --topic user_data_dlq --partitions 1 --replication-factor 1
 
-      echo 'Topics created successfully!'
-      kafka-topics --list --bootstrap-server broker:29092
-      "
+        echo 'Topics created successfully!'
+        kafka-topics --list --bootstrap-server broker:29092
     networks:
       - confluent
-
-  schema-registry:
-    image: confluentinc/cp-schema-registry:7.4.0
-    hostname: schema-registry
-    container_name: schema-registry
-    depends_on:
-      broker:
-        condition: service_healthy
-    ports:
-      - "8081:8081"
-    environment:
-      SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker:29092'
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
-    networks:
-      - confluent
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8081/" ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
 
   control-center:
     image: confluentinc/cp-enterprise-control-center:7.4.0
@@ -144,13 +111,10 @@ services:
     depends_on:
       broker:
         condition: service_healthy
-      schema-registry:
-        condition: service_healthy
     ports:
       - "9021:9021"
     environment:
       CONTROL_CENTER_BOOTSTRAP_SERVERS: 'broker:29092'
-      CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
       CONTROL_CENTER_REPLICATION_FACTOR: 1
       CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
       CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
@@ -165,25 +129,50 @@ services:
       timeout: 10s
       retries: 5
 
+  airflow-init:
+    image: apache/airflow:2.6.0-python3.9
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db init &&
+        airflow users create \
+          --username $${_AIRFLOW_WWW_USER_USERNAME} \
+          --firstname airflow \
+          --lastname airflow \
+          --role Admin \
+          --email airflow@example.com \
+          --password $${_AIRFLOW_WWW_USER_PASSWORD} || true
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - confluent
+
   webserver:
     image: apache/airflow:2.6.0-python3.9
     command: webserver
-    entrypoint: ['/opt/airflow/script/entrypoint.sh']
     depends_on:
-      - postgres
+      airflow-init:
+        condition: service_completed_successfully
     environment:
-      - LOAD_EX=n
-      - EXECUTOR=Sequential
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-      - AIRFLOW_WEBSERVER_SECRET_KEY=this_is_a_very_secured_key
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+      AIRFLOW_WEBSERVER_SECRET_KEY: this_is_a_very_secured_key
+      _PIP_ADDITIONAL_REQUIREMENTS: kafka-python==2.0.2 cassandra-driver==3.28.0 python-dotenv==1.0.0 pydantic==1.10.7
       # Pipeline configuration (via environment variables)
-      - ENVIRONMENT=development
-      - KAFKA_BOOTSTRAP_SERVERS=broker:29092
-      - KAFKA_TOPIC_USER_DATA=user_data
-      - KAFKA_TOPIC_DLQ=user_data_dlq
-      - API_BASE_URL=https://randomuser.me/api/
-      - LOG_LEVEL=INFO
-      - LOG_JSON_FORMAT=true
+      ENVIRONMENT: development
+      KAFKA_BOOTSTRAP_SERVERS: broker:29092
+      KAFKA_TOPIC_USER_DATA: user_data
+      KAFKA_TOPIC_DLQ: user_data_dlq
+      API_BASE_URL: https://randomuser.me/api/
+      LOG_LEVEL: INFO
+      LOG_JSON_FORMAT: 'true'
     logging:
       options:
         max-size: 10m
@@ -191,8 +180,6 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
       - ./src:/opt/airflow/src
-      - ./script/entrypoint.sh:/opt/airflow/script/entrypoint.sh
-      - ./requirements.txt:/opt/airflow/requirements.txt
       - ./.env:/opt/airflow/.env
     ports:
       - "8080:8080"
@@ -206,29 +193,27 @@ services:
 
   scheduler:
     image: apache/airflow:2.6.0-python3.9
+    command: scheduler
     depends_on:
       webserver:
         condition: service_healthy
     volumes:
       - ./dags:/opt/airflow/dags
       - ./src:/opt/airflow/src
-      - ./script/entrypoint.sh:/opt/airflow/script/entrypoint.sh
-      - ./requirements.txt:/opt/airflow/requirements.txt
       - ./.env:/opt/airflow/.env
     environment:
-      - LOAD_EX=n
-      - EXECUTOR=Sequential
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-      - AIRFLOW_WEBSERVER_SECRET_KEY=this_is_a_very_secured_key
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW_WEBSERVER_SECRET_KEY: this_is_a_very_secured_key
+      _PIP_ADDITIONAL_REQUIREMENTS: kafka-python==2.0.2 cassandra-driver==3.28.0 python-dotenv==1.0.0 pydantic==1.10.7
       # Pipeline configuration
-      - ENVIRONMENT=development
-      - KAFKA_BOOTSTRAP_SERVERS=broker:29092
-      - KAFKA_TOPIC_USER_DATA=user_data
-      - KAFKA_TOPIC_DLQ=user_data_dlq
-      - API_BASE_URL=https://randomuser.me/api/
-      - LOG_LEVEL=INFO
-      - LOG_JSON_FORMAT=true
-    command: bash -c "pip install -r ./requirements.txt && airflow db upgrade && airflow scheduler"
+      ENVIRONMENT: development
+      KAFKA_BOOTSTRAP_SERVERS: broker:29092
+      KAFKA_TOPIC_USER_DATA: user_data
+      KAFKA_TOPIC_DLQ: user_data_dlq
+      API_BASE_URL: https://randomuser.me/api/
+      LOG_LEVEL: INFO
+      LOG_JSON_FORMAT: 'true'
     networks:
       - confluent
 
@@ -242,6 +227,11 @@ services:
       options:
         max-size: 10m
         max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - confluent
 
@@ -274,10 +264,14 @@ services:
       context: .
       dockerfile: Dockerfile
     depends_on:
-      - spark-master
-      - broker
-      - cassandra_db
-      - kafka-init
+      spark-master:
+        condition: service_started
+      broker:
+        condition: service_healthy
+      cassandra_db:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
     volumes:
       - ./:/app
     working_dir: /app
@@ -292,7 +286,7 @@ services:
       ENVIRONMENT: development
       KAFKA_BOOTSTRAP_SERVERS: broker:29092
       KAFKA_TOPIC_USER_DATA: user_data
-      CASSANDRA_HOST: cassandra
+      CASSANDRA_HOSTS: cassandra
       CASSANDRA_PORT: 9042
       LOG_LEVEL: INFO
     networks:
