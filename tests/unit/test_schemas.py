@@ -309,6 +309,7 @@ class TestValidateTransformedData:
         assert len(errors) > 0
 
 
+@pytest.mark.skipif(SPARK_USER_SCHEMA is None, reason="pyspark not installed")
 class TestSparkUserSchema:
     """Tests for Spark User Schema."""
 
