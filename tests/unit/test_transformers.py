@@ -49,16 +49,30 @@ class TestUserTransformer:
         parsed_uuid = uuid.UUID(result["id"])
         assert str(parsed_uuid) == result["id"]
 
-    def test_transform_generates_unique_ids(self, transformer, sample_api_response):
-        """Test that each transform generates a unique ID."""
+    def test_transform_generates_deterministic_ids(self, transformer, sample_api_response):
+        """Test that same input always produces the same ID (deterministic uuid5)."""
+        raw_data = sample_api_response["results"][0]
+
+        results = [transformer.transform(raw_data) for _ in range(10)]
+        ids = {r["id"] for r in results}
+
+        # Same input should always produce the same deterministic ID
+        assert len(ids) == 1
+
+    def test_transform_generates_unique_ids_for_different_inputs(
+        self, transformer, sample_api_response
+    ):
+        """Test that different inputs produce different IDs."""
         raw_data = sample_api_response["results"][0]
 
         ids = set()
-        for _ in range(100):
-            result = transformer.transform(raw_data)
+        for i in range(100):
+            data = raw_data.copy()
+            data["email"] = f"user{i}@example.com"
+            result = transformer.transform(data)
             ids.add(result["id"])
 
-        # 100 runs should produce 100 unique IDs
+        # 100 different emails should produce 100 unique IDs
         assert len(ids) == 100
 
     def test_transform_builds_correct_address(self, transformer, sample_api_response):

@@ -79,8 +79,15 @@ class UserTransformer:
         # Build address
         address = self._build_address(location)
 
+        # Deterministic UUID for idempotent Cassandra upsert
+        email = sanitize_email(raw_data.get("email"))
+        reg_date = sanitize_string(
+            safe_get_nested(raw_data, "registered", "date"), default=""
+        )
+        deterministic_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{email}:{reg_date}"))
+
         transformed = {
-            "id": str(uuid.uuid4()),
+            "id": deterministic_id,
             "first_name": sanitize_string(
                 safe_get_nested(raw_data, "name", "first"), default="Unknown"
             ),
