@@ -3,7 +3,7 @@
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
@@ -202,64 +202,6 @@ class DLQConsumer:
         )
 
         return stats
-
-    def process_messages(
-        self,
-        handler: Callable[[DLQMessage], bool],
-        max_messages: Optional[int] = None,
-        commit_on_success: bool = True,
-    ) -> Dict[str, int]:
-        """
-        Process messages from the DLQ using the provided handler.
-
-        Args:
-            handler: Callable that receives a DLQMessage; return True on success.
-            max_messages: Maximum messages to process (None = unlimited).
-            commit_on_success: Whether to commit offset after successful processing.
-
-        Returns:
-            Dict with 'processed' and 'failed' counts.
-        """
-        processed = 0
-        failed = 0
-
-        logger.info(
-            f"Starting to process DLQ messages (max: {max_messages or 'unlimited'})"
-        )
-
-        for raw_message in self.consumer:
-            if max_messages and processed + failed >= max_messages:
-                break
-
-            try:
-                msg = self._parse_dlq_message(raw_message)
-
-                success = handler(msg)
-
-                if success:
-                    processed += 1
-                    if commit_on_success and not self.auto_commit:
-                        self.consumer.commit()
-
-                    logger.debug("Incremented dlq_messages_processed")
-                    logger.debug(
-                        "DLQ message processed",
-                        extra={"offset": msg.offset, "error_type": msg.error_type},
-                    )
-                else:
-                    failed += 1
-                    logger.debug("Incremented dlq_messages_failed")
-
-            except Exception as e:
-                failed += 1
-                logger.error(f"Error processing DLQ message: {e}")
-                logger.debug("Incremented dlq_processing_errors")
-
-        logger.info(
-            "DLQ processing complete", extra={"processed": processed, "failed": failed}
-        )
-
-        return {"processed": processed, "failed": failed}
 
     def retry_messages(
         self,
