@@ -49,7 +49,9 @@ class TestUserTransformer:
         parsed_uuid = uuid.UUID(result["id"])
         assert str(parsed_uuid) == result["id"]
 
-    def test_transform_generates_deterministic_ids(self, transformer, sample_api_response):
+    def test_transform_generates_deterministic_ids(
+        self, transformer, sample_api_response
+    ):
         """Test that same input always produces the same ID (deterministic uuid5)."""
         raw_data = sample_api_response["results"][0]
 
