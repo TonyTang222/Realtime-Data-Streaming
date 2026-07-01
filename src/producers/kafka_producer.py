@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Optional
 
 from kafka import KafkaProducer
 from kafka.errors import KafkaError, KafkaTimeoutError, NoBrokersAvailable
+from prometheus_client import Counter, Histogram, start_http_server
 
 from src.config.schemas import DLQMessage
 from src.config.settings import KafkaConfig, get_settings
@@ -13,6 +14,35 @@ from src.exceptions.custom_exceptions import KafkaConnectionError
 from src.utils.retry import exponential_backoff_retry
 
 logger = logging.getLogger(__name__)
+
+# Prometheus metrics
+_MESSAGES_SENT = Counter(
+    "kafka_messages_sent_total",
+    "Total messages successfully sent to Kafka",
+)
+_DLQ_MESSAGES = Counter(
+    "kafka_dlq_messages_total",
+    "Total messages routed to Dead Letter Queue",
+)
+_SEND_RETRIES = Counter(
+    "kafka_send_retries_total",
+    "Total Kafka send retries",
+)
+_SEND_DURATION = Histogram(
+    "kafka_send_duration_seconds",
+    "Time spent sending a message to Kafka",
+    buckets=[0.01, 0.05, 0.1, 0.5, 1.0, 5.0],
+)
+
+_metrics_server_started = False
+
+
+def start_metrics_server(port: int = 8000) -> None:
+    global _metrics_server_started
+    if not _metrics_server_started:
+        start_http_server(port)
+        _metrics_server_started = True
+        logger.info(f"Prometheus metrics server started on port {port}")
 
 
 class ResilientKafkaProducer:
@@ -138,21 +168,23 @@ class ResilientKafkaProducer:
 
         while retry_count < max_retries:
             try:
-                future = self._producer.send(topic, value=data, key=key)
+                with _SEND_DURATION.time():
+                    future = self._producer.send(topic, value=data, key=key)
 
-                if sync:
-                    record_metadata = future.get(timeout=10)
+                    if sync:
+                        record_metadata = future.get(timeout=10)
 
-                    logger.debug(
-                        "Message sent successfully",
-                        extra={
-                            "topic": record_metadata.topic,
-                            "partition": record_metadata.partition,
-                            "offset": record_metadata.offset,
-                        },
-                    )
+                        logger.debug(
+                            "Message sent successfully",
+                            extra={
+                                "topic": record_metadata.topic,
+                                "partition": record_metadata.partition,
+                                "offset": record_metadata.offset,
+                            },
+                        )
 
                 self._stats["sent"] += 1
+                _MESSAGES_SENT.inc()
 
                 if self.on_send_success:
                     self.on_send_success(data, record_metadata if sync else None)
@@ -161,6 +193,7 @@ class ResilientKafkaProducer:
 
             except KafkaError as e:
                 retry_count += 1
+                _SEND_RETRIES.inc()
                 logger.warning(
                     f"Kafka send failed (attempt {retry_count}/{max_retries}): {e}",
                     extra={
@@ -203,6 +236,7 @@ class ResilientKafkaProducer:
             future.get(timeout=10)
 
             self._stats["sent_to_dlq"] += 1
+            _DLQ_MESSAGES.inc()
 
             logger.info(
                 "Message sent to DLQ",

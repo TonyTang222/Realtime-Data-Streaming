@@ -20,7 +20,7 @@ from src.exceptions.custom_exceptions import (  # noqa: E402
     TransformationError,
 )
 from src.producers.api_client import RandomUserAPIClient  # noqa: E402
-from src.producers.kafka_producer import ResilientKafkaProducer  # noqa: E402
+from src.producers.kafka_producer import ResilientKafkaProducer, start_metrics_server  # noqa: E402
 from src.transformers.user_transformer import UserTransformer  # noqa: E402
 from src.utils.logging_config import get_logger, setup_logging  # noqa: E402
 
@@ -44,6 +44,7 @@ def stream_data():
     3. Each iteration: fetch API data -> validate -> transform -> send to Kafka
     4. Send validation failures to DLQ
     """
+    start_metrics_server(port=8000)
     settings = get_settings()
 
     # Stats

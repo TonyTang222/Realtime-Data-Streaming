@@ -1,9 +1,11 @@
 """Spark Streaming Consumer"""
 
 import logging
+import time
 from typing import Optional
 
 from cassandra.cluster import Cluster
+from prometheus_client import Counter, Histogram, start_http_server
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col, from_json
 
@@ -16,6 +18,31 @@ from ..config.settings import Settings, get_settings
 from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+# Prometheus metrics
+_BATCHES_PROCESSED = Counter(
+    "spark_batches_processed_total",
+    "Total micro-batches processed by Spark Structured Streaming",
+)
+_RECORDS_WRITTEN = Counter(
+    "spark_records_written_total",
+    "Total records written to Cassandra",
+)
+_BATCH_DURATION = Histogram(
+    "spark_batch_duration_seconds",
+    "Time spent processing each Spark micro-batch",
+    buckets=[0.1, 0.5, 1.0, 5.0, 10.0, 30.0],
+)
+
+_metrics_server_started = False
+
+
+def start_metrics_server(port: int = 8001) -> None:
+    global _metrics_server_started
+    if not _metrics_server_started:
+        start_http_server(port)
+        _metrics_server_started = True
+        logger.info(f"Prometheus metrics server started on port {port}")
 
 
 class SparkStreamingConsumer:
@@ -201,6 +228,33 @@ class SparkStreamingConsumer:
             logger.error(f"Failed to setup Cassandra: {e}")
             return False
 
+    def _write_batch(self, batch_df: DataFrame, batch_id: int) -> None:
+        """Write a micro-batch to Cassandra and record Prometheus metrics."""
+        start = time.time()
+        count = batch_df.count()
+
+        (
+            batch_df.write.format("org.apache.spark.sql.cassandra")
+            .option("keyspace", self.settings.cassandra.keyspace)
+            .option("table", self.settings.cassandra.table)
+            .mode("append")
+            .save()
+        )
+
+        duration = time.time() - start
+        _BATCHES_PROCESSED.inc()
+        _RECORDS_WRITTEN.inc(count)
+        _BATCH_DURATION.observe(duration)
+
+        logger.info(
+            "Batch written to Cassandra",
+            extra={
+                "batch_id": batch_id,
+                "record_count": count,
+                "duration_seconds": round(duration, 3),
+            },
+        )
+
     def start_streaming(self, selection_df: DataFrame) -> None:
         """
         Start streaming writes to Cassandra.
@@ -211,10 +265,8 @@ class SparkStreamingConsumer:
         logger.info("Starting streaming to Cassandra...")
 
         streaming_query = (
-            selection_df.writeStream.format("org.apache.spark.sql.cassandra")
+            selection_df.writeStream.foreachBatch(self._write_batch)
             .option("checkpointLocation", self.settings.spark.checkpoint_location)
-            .option("keyspace", self.settings.cassandra.keyspace)
-            .option("table", self.settings.cassandra.table)
             .start()
         )
 
@@ -224,6 +276,7 @@ class SparkStreamingConsumer:
     def run(self) -> None:
         """Run the full streaming pipeline."""
         logger.info("Starting Spark Streaming Consumer...")
+        start_metrics_server(port=8001)
 
         if self.spark is None:
             logger.error("Failed to create Spark session, exiting")

@@ -1,0 +1,147 @@
+{
+  "title": "Real-Time Streaming Pipeline",
+  "uid": "streaming-pipeline",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Messages Sent to Kafka (total)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "kafka_messages_sent_total",
+          "legendFormat": "Sent"
+        }
+      ],
+      "options": { "colorMode": "background", "graphMode": "area" }
+    },
+    {
+      "id": 2,
+      "title": "DLQ Messages (total)",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "kafka_dlq_messages_total",
+          "legendFormat": "DLQ"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            { "color": "green", "value": null },
+            { "color": "red", "value": 1 }
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Spark Batches Processed (total)",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "spark_batches_processed_total",
+          "legendFormat": "Batches"
+        }
+      ],
+      "options": { "colorMode": "background", "graphMode": "area" }
+    },
+    {
+      "id": 4,
+      "title": "Spark Records Written (total)",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "spark_records_written_total",
+          "legendFormat": "Records"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            { "color": "green", "value": null }
+          ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Message Throughput (msg/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(kafka_messages_sent_total[1m])",
+          "legendFormat": "Sent/s"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(kafka_dlq_messages_total[1m])",
+          "legendFormat": "DLQ/s"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Spark Batch Processing Duration (p99)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.99, rate(spark_batch_duration_seconds_bucket[5m]))",
+          "legendFormat": "p99 latency"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.50, rate(spark_batch_duration_seconds_bucket[5m]))",
+          "legendFormat": "p50 latency"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "DLQ Rate (% of total messages)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(kafka_dlq_messages_total[1m]) / (rate(kafka_messages_sent_total[1m]) + rate(kafka_dlq_messages_total[1m])) * 100",
+          "legendFormat": "DLQ %"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Kafka Send Retries",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(kafka_send_retries_total[1m])",
+          "legendFormat": "Retries/s"
+        }
+      ]
+    }
+  ]
+}

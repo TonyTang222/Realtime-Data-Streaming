@@ -1,45 +1,102 @@
 # Real-Time Data Streaming Pipeline
 
-Real-time streaming pipeline that ingests user data from RandomUser API,
+Production-grade streaming pipeline that ingests user data from a REST API,
 streams through Apache Kafka, processes with Spark Structured Streaming,
-and stores in Cassandra — with built-in fault tolerance via Dead Letter Queue
-and exponential backoff retry.
+and stores in Cassandra — observable end-to-end via Prometheus and Grafana.
+
+[![CI](https://github.com/TonyTang222/Realtime-Data-Streaming/actions/workflows/ci.yml/badge.svg)](https://github.com/TonyTang222/Realtime-Data-Streaming/actions/workflows/ci.yml)
+![Kafka](https://img.shields.io/badge/Kafka-Confluent_7.4-231F20?logo=apachekafka&logoColor=white)
+![Spark](https://img.shields.io/badge/Spark_Streaming-3.5-E25A1C?logo=apachespark&logoColor=white)
+![Cassandra](https://img.shields.io/badge/Cassandra-latest-1287B1?logo=apachecassandra&logoColor=white)
+![Airflow](https://img.shields.io/badge/Airflow-2.6-017CEE?logo=apacheairflow&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-2.51-E6522C?logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-10.4-F46800?logo=grafana&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.9-3776AB?logo=python&logoColor=white)
+
+---
+
+## What This Project Delivers
+
+Five production concerns, each backed by a concrete implementation:
+
+| Layer | Implementation | Problem Solved |
+|---|---|---|
+| **Ingestion** | Airflow DAG with exponential backoff retry + Pydantic validation before Kafka send | "Bad data silently enters the pipeline" |
+| **Messaging** | Kafka `user_data` topic (3 partitions) + `user_data_dlq` Dead Letter Queue | "Failed messages are lost with no trace" |
+| **Processing** | Spark Structured Streaming with `foreachBatch` + Spark Checkpoint for offset persistence | "Pipeline restart causes data loss or duplicates" |
+| **Storage** | Cassandra UUID primary key upsert — idempotent by design | "Duplicate writes corrupt the dataset" |
+| **Observability** | Prometheus metrics on producer + consumer; Grafana dashboard with throughput, DLQ rate, p99 latency | "We find out the pipeline is broken from end-users" |
+
+---
 
 ## Architecture
 
-![System Architecture](Data%20engineering%20architecture.png)
-
-**Data Flow:**
-
 ```
-RandomUser API → Airflow (daily schedule)
-                    ↓
-              Kafka Producer → user_data topic → Spark Structured Streaming → Cassandra
-                    ↓ (on failure)
-              user_data_dlq topic (Dead Letter Queue)
+RandomUser API → Airflow DAG (daily)
+                      │
+                      ▼
+              Kafka Producer ──────────────────────► user_data topic (3 partitions)
+              (retry + DLQ)                                    │
+                      │                                        ▼
+                      │ (validation failure)     Spark Structured Streaming
+                      ▼                          (foreachBatch + Checkpoint)
+              user_data_dlq topic                              │
+                                                               ▼
+                                                          Cassandra
+                                                     (UUID upsert — idempotent)
+
+Prometheus ◄── /metrics (producer :8000)
+Prometheus ◄── /metrics (consumer  :8001)
+               │
+               ▼
+           Grafana Dashboard
 ```
 
 ---
 
-## Fault Tolerance Mechanisms
+## Fault Tolerance Design
 
-| Mechanism | Implementation | Problem Solved |
-|-----------|---------------|----------------|
-| **Dead Letter Queue** | Failed messages routed to `user_data_dlq` Kafka topic with error metadata | Prevents data loss from non-recoverable errors |
-| **Exponential Backoff with Jitter** | `delay = min(base * 2^attempt, max_delay) * (1 + random(0, 0.5))` | Prevents thundering herd on retries |
-| **Retryable vs Non-retryable** | `is_retryable()` checks error type; connection errors → retry, validation errors → DLQ | Avoids wasting resources on permanent failures |
-| **Spark Checkpoint** | Offsets persisted to checkpoint directory, recovered on restart | No data loss on Spark failure recovery |
-| **Cassandra Upsert** | Primary key-based INSERT acts as natural upsert | Idempotent writes prevent duplicates |
-| **Pydantic Validation** | Schema validation before Kafka send; rejects malformed data to DLQ | Catches bad data before it enters the pipeline |
+| Mechanism | Implementation | Guarantee |
+|---|---|---|
+| **Custom Exception Hierarchy** | 4 categories: `APIError` / `KafkaError` / `CassandraError` / `DataValidationError`, each with `is_retryable()` | Permanent failures skip retry and go straight to DLQ |
+| **Exponential Backoff + Jitter** | `delay = min(base × 2ⁿ, max) × (1 + rand(0, 0.5))` | Prevents thundering herd when broker recovers |
+| **Dead Letter Queue** | Failed messages routed to `user_data_dlq` with error type, message, and retry count | Zero silent data loss — every failure is traceable |
+| **Spark Checkpoint** | Kafka offsets persisted to checkpoint directory | At-least-once delivery; idempotent Cassandra writes make it effectively exactly-once |
+| **Cassandra UUID Upsert** | `INSERT ... IF NOT EXISTS` on UUID primary key | Duplicate messages from replay produce identical rows, not corruption |
+| **Pydantic Pre-validation** | Schema validated before Kafka send; rejects malformed data to DLQ | Downstream consumers never receive invalid data |
 
 ---
 
-## Key Design Decisions
+## Observability
 
-1. **DLQ over retry-forever** — Non-recoverable errors (schema validation, serialization) route to DLQ instead of retrying indefinitely
-2. **Backoff with jitter** — Adds random 0-50% delay variance to prevent multiple clients from retrying at the same time
-3. **Custom exception hierarchy** — 4 categories (API / Kafka / Cassandra / Data Validation) with `is_retryable()` for automatic retry-or-DLQ routing
-4. **Pydantic before Kafka** — Validates data schema before sending to Kafka, so downstream consumers never receive malformed data
+Prometheus scrapes two endpoints every 15 seconds:
+
+| Metric | Type | What It Tells You |
+|---|---|---|
+| `kafka_messages_sent_total` | Counter | Producer throughput |
+| `kafka_dlq_messages_total` | Counter | Failure rate — should stay at 0 |
+| `kafka_send_retries_total` | Counter | Broker instability indicator |
+| `kafka_send_duration_seconds` | Histogram | Producer latency distribution |
+| `spark_batches_processed_total` | Counter | Spark micro-batch throughput |
+| `spark_records_written_total` | Counter | Cassandra write throughput |
+| `spark_batch_duration_seconds` | Histogram | p50 / p99 processing latency |
+
+Grafana dashboard auto-provisions on startup — no manual setup required.
+
+---
+
+## Tech Stack
+
+| Layer | Tool |
+|---|---|
+| Orchestration | Apache Airflow 2.6 |
+| Messaging | Apache Kafka (Confluent 7.4) + Dead Letter Queue |
+| Stream Processing | Spark Structured Streaming 3.5 |
+| Storage | Apache Cassandra |
+| Observability | Prometheus 2.51 + Grafana 10.4 |
+| Validation | Pydantic v1 |
+| Infra | Docker Compose (14 services), GitHub Actions CI |
+| Testing | pytest — unit + integration |
 
 ---
 
@@ -50,9 +107,6 @@ RandomUser API → Airflow (daily schedule)
 ```bash
 git clone https://github.com/TonyTang222/Realtime-Data-Streaming.git
 cd Realtime-Data-Streaming
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-dev.txt
 cp .env.example .env
 ```
 
@@ -62,36 +116,52 @@ cp .env.example .env
 docker compose up -d
 ```
 
-### 3. Access the services
+First run pulls ~4 GB of images. Subsequent starts take ~30 seconds.
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| Airflow | http://localhost:8080 | airflow / airflow |
-| Kafka Control Center | http://localhost:9021 | - |
-
-### 4. Query Cassandra
+### 3. Trigger the pipeline
 
 ```bash
-# Connect to Cassandra shell
-docker exec -it cassandra cqlsh
-
-# Query stored data
-SELECT * FROM spark_streams.created_users LIMIT 10;
+# Via Airflow UI — navigate to DAGs → user_auto_loading → trigger
+# Or via CLI:
+docker compose exec webserver airflow dags trigger user_auto_loading
 ```
 
-### 5. Run tests
+### 4. Access services
+
+| Service | URL | Credentials |
+|---|---|---|
+| Airflow | http://localhost:8081 | airflow / airflow |
+| Kafka Control Center | http://localhost:9021 | — |
+| Spark Master UI | http://localhost:9090 | — |
+| Grafana | http://localhost:3000 | admin / admin |
+| Prometheus | http://localhost:9093 | — |
+
+### 5. Verify data end-to-end
 
 ```bash
+# Check Kafka messages
+docker exec broker kafka-console-consumer \
+  --bootstrap-server broker:29092 \
+  --topic user_data --from-beginning --max-messages 5
+
+# Query Cassandra
+docker exec -it cassandra cqlsh -e \
+  "SELECT id, first_name, last_name, email FROM spark_streams.created_users LIMIT 10;"
+```
+
+### 6. Run tests
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
 pytest tests/ -v
 ```
 
-### Stopping Services
+### Stop services
 
 ```bash
-docker compose down
-
-# Remove all data volumes
-docker compose down -v
+docker compose down        # stop containers
+docker compose down -v     # stop + remove volumes
 ```
 
 ---
@@ -100,41 +170,48 @@ docker compose down -v
 
 ```
 ├── dags/
-│   └── kafka_stream.py              # Airflow DAG: API → validate → transform → Kafka
+│   └── kafka_stream.py              # Airflow DAG: fetch → validate → transform → Kafka
 ├── src/
 │   ├── config/
-│   │   ├── settings.py              # Environment variable configuration (12-factor)
+│   │   ├── settings.py              # 12-factor config via environment variables
 │   │   └── schemas.py               # Pydantic models + Spark schema + Cassandra DDL
 │   ├── producers/
 │   │   ├── api_client.py            # RandomUser API client with retry
-│   │   └── kafka_producer.py        # Resilient Kafka producer with DLQ fallback
+│   │   └── kafka_producer.py        # Resilient producer: retry → DLQ + Prometheus metrics
 │   ├── consumers/
-│   │   ├── spark_consumer.py        # Spark Structured Streaming → Cassandra
-│   │   └── dlq_consumer.py          # DLQ message analysis, processing, and retry
+│   │   ├── spark_consumer.py        # Spark Structured Streaming → Cassandra + Prometheus metrics
+│   │   └── dlq_consumer.py          # DLQ analysis, retry, and sampling
 │   ├── transformers/
 │   │   └── user_transformer.py      # API response → flat user record
 │   ├── utils/
-│   │   ├── retry.py                 # Exponential backoff with jitter decorator
+│   │   ├── retry.py                 # Exponential backoff + jitter decorator
 │   │   ├── logging_config.py        # JSON structured logging
 │   │   └── validators.py            # Input sanitization utilities
 │   └── exceptions/
 │       └── custom_exceptions.py     # Exception hierarchy with is_retryable()
+├── monitoring/
+│   ├── prometheus.yml               # Scrape config (producer :8000, consumer :8001)
+│   └── grafana/provisioning/        # Auto-provisioned datasource + dashboard
 ├── tests/
-│   ├── unit/                        # Unit tests (retry, schemas, transformers, etc.)
-│   └── integration/                 # Pipeline integration tests
-├── docker-compose.yml               # 11 services with health checks
+│   ├── unit/                        # Retry, schemas, transformers, validators
+│   └── integration/                 # End-to-end pipeline tests
+├── docker-compose.yml               # 14 services with health checks + startup ordering
 ├── Dockerfile                       # Spark application image
 └── spark_stream.py                  # Spark streaming entry point
 ```
 
 ---
 
-## Tech Stack
+## Key Design Decisions
 
-- **Apache Airflow 2.6** — DAG scheduling and orchestration
-- **Apache Kafka** (Confluent 7.4) — Message broker with Dead Letter Queue
-- **Spark Structured Streaming 3.5** — Real-time stream processing from Kafka to Cassandra
-- **Apache Cassandra** — Distributed NoSQL storage with natural upsert
-- **Pydantic v1** — Schema validation for API responses and transformed data
-- **Docker Compose** — 12-service orchestration with health checks and startup ordering
-- **pytest** — Unit and integration tests with mock-based external service isolation
+**Why Cassandra over PostgreSQL?**
+Cassandra's wide-row model handles high-throughput append workloads without write contention. UUID primary keys provide natural idempotency for Spark's at-least-once delivery.
+
+**Why Spark Structured Streaming over Flink?**
+Kafka + Spark + Cassandra share a mature connector ecosystem. `foreachBatch` exposes each micro-batch as a DataFrame, enabling both Cassandra writes and Prometheus instrumentation in one hook.
+
+**Why DLQ as a Kafka topic rather than a database table?**
+Keeping failed messages in Kafka preserves the ability to replay them through the same consumer infrastructure after fixing the root cause. A separate database would require a separate consumer.
+
+**Why exponential backoff with jitter?**
+Pure exponential backoff causes synchronized retry storms when multiple producers recover simultaneously. Jitter (±50% random variance) desynchronizes retries and spreads broker load.

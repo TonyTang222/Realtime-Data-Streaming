@@ -4,6 +4,7 @@ cassandra-driver==3.28.0
 python-dotenv==1.0.0
 pydantic>=1.10.0,<2.0.0
 requests>=2.28.0
+prometheus-client>=0.19.0
 
 # Spark (installed in Docker image, listed for reference)
 # pyspark==3.5.0
